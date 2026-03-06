@@ -1,9 +1,11 @@
 ## Playground for REST and GraphQL APIs
 
-Most of the code was generated with the help of AI and Vibe Coding.
-It creates a FastAPI API running on localhost:8000 which provides classic REST as well as GraphQL endpoints.
-The GraphQL endpoints are then used the automagically generate a Python library. So any Python client can import the library and use the API endpoints without any further development. In addition Pytest test cases are automatically generated and executed.
+Most of the code was generated with the help of AI and Vibe Coding.\
+It creates a FastAPI API setup running on localhost:8000 which provides classic REST as well as GraphQL endpoints.\
+The GraphQL endpoints are then used the automagically generate a Python library. So any Python client can import the library and use the API endpoints without any further development.\
+In addition Pytest test cases are automatically generated and executed.\
 Everything is Docker based so it can easily be deployed and used elsewhere.
+
 One can easily use the code locally by using the following Make targets:
 ```
 make
