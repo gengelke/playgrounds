@@ -16,6 +16,8 @@ make clean
 make clean-all
 ```
 
+<img width="583" height="744" alt="Screenshot 2026-03-06 at 2 14 35 PM" src="https://github.com/user-attachments/assets/941a9714-1689-4569-adca-ac5ee4b8c37e" />
+
 ### Vibe conding steps
 ```
 i am a python rookie. generate simple plain easy to understand code which uses
