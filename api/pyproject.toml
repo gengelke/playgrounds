@@ -1,0 +1,20 @@
+[project]
+name = "employee-cli"
+version = "0.1.0"
+description = "CLI for GraphQL employee API"
+dependencies = [
+    "pydantic",
+    "httpx"
+]
+
+[project.scripts]
+employee-cli = "generated_client.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+#packages = ["generated_client"]
+packages = ["generated_client"]
+py-modules = ["cli"]

@@ -1,0 +1,127 @@
+# =========================
+# Python bytecode
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# =========================
+# Build / packaging
+# =========================
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.whl
+
+# =========================
+# Generated GraphQL client
+# =========================
+generated_client/
+
+# =========================
+# Coverage / testing
+# =========================
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.cache/
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+*.pem
+*.key
+*.crt
+secrets.json
+
+# =========================
+# SQLite / local data
+# =========================
+*.db
+*.sqlite3
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+
+# =========================
+# Node (schema downloader)
+# =========================
+node_modules/
+npm-debug.log
+
+# =========================
+# Temporary schema files
+# =========================
+schema.json
+schema.graphql
+
+# =====================================================
+# VS CODE
+# =====================================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# =====================================================
+# VIM / NEOVIM
+# =====================================================
+# swap files
+*.swp
+*.swo
+*.swn
+
+# backup files
+*~
+*.bak
+
+# undo files
+*.un~
+
+# vim session files
+Session.vim
+Session.vim.*
+
+# nvim
+.nvim/
+.nvimlog
+.nvim.lua
+
+# vim plugin caches
+.vim/
+.vimrc.local
+
+# coc.nvim / LSP
+.coc/
+.ccls-cache/
+.clangd/
+.lsp/
+
+# =====================================================
+# OS files
+# =====================================================
+.DS_Store
+Thumbs.db
