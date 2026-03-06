@@ -18,47 +18,6 @@ make clean-all
 
 <img width="583" height="744" alt="Screenshot 2026-03-06 at 2 14 35 PM" src="https://github.com/user-attachments/assets/941a9714-1689-4569-adca-ac5ee4b8c37e" />
 
-### Vibe conding steps
-```
-i am a python rookie. generate simple plain easy to understand code which uses
-an sqlite database named company.sqlite. the database includes a table named
-employees. each entry consists of string 'name', string 'surname', string
-'description', integer 'employee_id'.
-```
-```
-code looks great. pleas add simple plain easy to understand fastapi code which
-adds and entry to the employee table when REST API endpoint /employee is called
-with POST. it returns all existing entries of table employee when /employee is
-called with GET. The entry gets deleted when endpoint is called with DELETE.
-Needs a function to update existing entries as well.
-```
-```
-code looks great. pleas add simple plain easy to understand fastapi code which
-adds graphql functionality in addition to the existing REST stuff
-```
-```
-code looks great. but an update operation is missing in the graphql. 
-please show the complete code
-```
-```
-code looks great. use a more flexible approach in Query (Read) instead of rows)
-please show the complete code
-```
-```
-code looks great. can we pull the database connect parts into a centrailized
-location so i would have to change it only once in case i wanted to use another
-database like postgres in future instead of sqlite?
-```
-```
-the code looks great. please add an initial entry to the employee table during
-statup of the app
-```
-
-### Start
-```
-docker compose up --build
-```
-
 ### Open
 ```
 http://localhost:8000/docs
@@ -157,4 +116,39 @@ python3 example_client.py
 pip install -e .
 employee-cli list
 
+```
+### Vibe conding steps
+```
+i am a python rookie. generate simple plain easy to understand code which uses
+an sqlite database named company.sqlite. the database includes a table named
+employees. each entry consists of string 'name', string 'surname', string
+'description', integer 'employee_id'.
+```
+```
+code looks great. pleas add simple plain easy to understand fastapi code which
+adds and entry to the employee table when REST API endpoint /employee is called
+with POST. it returns all existing entries of table employee when /employee is
+called with GET. The entry gets deleted when endpoint is called with DELETE.
+Needs a function to update existing entries as well.
+```
+```
+code looks great. pleas add simple plain easy to understand fastapi code which
+adds graphql functionality in addition to the existing REST stuff
+```
+```
+code looks great. but an update operation is missing in the graphql. 
+please show the complete code
+```
+```
+code looks great. use a more flexible approach in Query (Read) instead of rows)
+please show the complete code
+```
+```
+code looks great. can we pull the database connect parts into a centrailized
+location so i would have to change it only once in case i wanted to use another
+database like postgres in future instead of sqlite?
+```
+```
+the code looks great. please add an initial entry to the employee table during
+statup of the app
 ```
