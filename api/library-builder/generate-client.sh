@@ -1,24 +1,23 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-echo "Downloading GraphQL introspection schema..."
+set -euo pipefail
 
-curl -X POST http://fastapi:8000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ __schema { types { name } } }"}' \
-  > /workspace/schema.json
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+API_URL="${API_URL:-http://127.0.0.1:8000}"
 
+echo "Downloading full introspection schema from ${API_URL}..."
 
-echo "Downloading full introspection schema..."
-
-curl -X POST http://fastapi:8000/graphql \
+curl -sS -X POST "${API_URL}/graphql" \
   -H "Content-Type: application/json" \
   -d @<(echo '{"query":"query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { ...FullType } directives { name description locations args { ...InputValue } } } } fragment FullType on __Type { kind name description fields(includeDeprecated: true) { name description args { ...InputValue } type { ...TypeRef } isDeprecated deprecationReason } inputFields { ...InputValue } interfaces { ...TypeRef } enumValues(includeDeprecated: true) { name description isDeprecated deprecationReason } possibleTypes { ...TypeRef } } fragment InputValue on __InputValue { name description type { ...TypeRef } defaultValue } fragment TypeRef on __Type { kind name ofType { kind name ofType { kind name } } }"}') \
-  > /workspace/schema.json
+  > "${ROOT_DIR}/schema.json"
 
-curl -X GET http://fastapi:8000/schema.graphql -o schema.graphql
+curl -sS -X GET "${API_URL}/schema.graphql" -o "${ROOT_DIR}/schema.graphql"
 
 echo "Generating Python client..."
-
-ariadne-codegen client --config /workspace/library-builder/pyproject.toml
+(
+  cd "${ROOT_DIR}"
+  ariadne-codegen client --config library-builder/pyproject.toml
+)
 
 echo "Done."

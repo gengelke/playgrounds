@@ -2,10 +2,11 @@ version: "3.9"
 
 services:
   fastapi:
-    user: "${UID}:${GID}"
     build: ./fastapi
+    environment:
+      - DATABASE_PATH=/data/company.sqlite
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     volumes:
       - ./:/data
 
@@ -17,10 +18,11 @@ services:
     container_name: graphql_codegen
     depends_on:
       - fastapi
+    environment:
+      - API_URL=http://fastapi:8000
     volumes:
       - ./:/workspace
     working_dir: /workspace
-    user: "${UID}:${GID}"
     command: >
       bash -c "
       echo 'Waiting for API...' &&

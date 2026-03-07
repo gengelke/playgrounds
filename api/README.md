@@ -1,12 +1,10 @@
 ## Playground for REST and GraphQL APIs
 
-Most of the code was generated with the help of AI and Vibe Coding.\
-It creates a FastAPI API setup running on localhost:8000 which provides classic REST as well as GraphQL endpoints.\
-The GraphQL endpoints are then used the automagically generate a Python library. So any Python client can import the library and use the API endpoints without any further development.\
-In addition Pytest test cases are automatically generated and executed.\
-Everything is Docker based so it can easily be deployed and used elsewhere.
-
-One can easily use the code locally by using the following Make targets:
+Most of the code was generated with the help of AI and Vibe Coding.
+It creates a FastAPI API running on localhost:8000 which provides classic REST as well as GraphQL endpoints.
+The GraphQL endpoints are then used the automagically generate a Python library. So any Python client can import the library and use the API endpoints without any further development. In addition Pytest test cases are automatically generated and executed.
+You can run the project either with Docker or directly via Bash CLI (local venv).
+One can easily use the code via the following Make targets:
 ```
 make
 ```
@@ -15,10 +13,46 @@ make example
 ```
 ```
 make clean
-make clean-all
+make distclean
 ```
 
-<img width="583" height="744" alt="Screenshot 2026-03-06 at 2 14 35 PM" src="https://github.com/user-attachments/assets/941a9714-1689-4569-adca-ac5ee4b8c37e" />
+### Start without Docker
+```
+make install
+make run
+```
+
+Background mode:
+```
+make run-bg
+make stop
+```
+
+To regenerate the GraphQL client from Bash:
+```
+make codegen
+```
+
+### Start with Docker
+```
+make run-docker
+```
+
+Regenerate GraphQL client inside Docker:
+```
+make codegen-docker
+```
+
+Stop Docker services:
+```
+make stop-docker
+```
+
+Optional one-shot workflows:
+```
+make all-local
+make all-docker
+```
 
 ### Open
 ```
@@ -119,6 +153,7 @@ pip install -e .
 employee-cli list
 
 ```
+
 ### Vibe conding steps
 ```
 i am a python rookie. generate simple plain easy to understand code which uses

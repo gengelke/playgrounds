@@ -1,7 +1,6 @@
 [tool.ariadne-codegen]
-#schema_path = "/workspace/schema.json"
-schema_path = "/workspace/schema.graphql"
-schema_format = "json"
-queries_path = "/workspace/library-builder/queries"
+schema_path = "schema.graphql"
+schema_format = "graphql"
+queries_path = "library-builder/queries"
 target_package_name = "generated_client"
 async_client = true
