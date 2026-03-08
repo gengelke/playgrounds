@@ -8,6 +8,7 @@ This project supports two run modes through a single Makefile entrypoint:
 `make up` also performs first-run initialization automatically:
 
 - waits until Nexus is healthy
+- accepts the Community Edition EULA via REST API when required
 - ensures a managed admin account and regular account exist
 - configures anonymous access
 - ensures a hosted PyPI repository `pypi-public` exists

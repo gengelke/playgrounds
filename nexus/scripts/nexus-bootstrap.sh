@@ -169,6 +169,60 @@ configure_bootstrap_password() {
   CURRENT_BOOTSTRAP_PASSWORD="$NEXUS_BOOTSTRAP_PASSWORD"
 }
 
+ensure_ce_eula_accepted() {
+  local eula_url eula_body eula_status payload set_body set_status
+  eula_url="${NEXUS_URL}/service/rest/v1/system/eula"
+  eula_body="$(mktemp)"
+
+  eula_status="$(curl -sS -o "$eula_body" -w '%{http_code}' \
+    --connect-timeout "$NEXUS_CONNECT_TIMEOUT" \
+    --max-time "$NEXUS_CURL_MAX_TIME" \
+    -u "${NEXUS_BOOTSTRAP_USER}:${CURRENT_BOOTSTRAP_PASSWORD}" \
+    "$eula_url" || true)"
+
+  if [[ "$eula_status" == "404" ]]; then
+    rm -f "$eula_body"
+    log "Community EULA endpoint not available; skipping EULA acceptance."
+    return 0
+  fi
+
+  if [[ "$eula_status" != "200" ]]; then
+    cat "$eula_body" >&2 || true
+    rm -f "$eula_body"
+    echo "Failed to query Community EULA status." >&2
+    exit 1
+  fi
+
+  if grep -q '"accepted"[[:space:]]*:[[:space:]]*true' "$eula_body"; then
+    rm -f "$eula_body"
+    log "Community EULA already accepted."
+    return 0
+  fi
+
+  payload="$(tr -d '\n' <"$eula_body" | sed -E 's/"accepted"[[:space:]]*:[[:space:]]*false/"accepted":true/')"
+  rm -f "$eula_body"
+
+  set_body="$(mktemp)"
+  set_status="$(curl -sS -o "$set_body" -w '%{http_code}' \
+    --connect-timeout "$NEXUS_CONNECT_TIMEOUT" \
+    --max-time "$NEXUS_CURL_MAX_TIME" \
+    -u "${NEXUS_BOOTSTRAP_USER}:${CURRENT_BOOTSTRAP_PASSWORD}" \
+    -H "Content-Type: application/json" \
+    -X POST \
+    --data "$payload" \
+    "$eula_url" || true)"
+
+  if [[ "$set_status" != "204" && "$set_status" != "200" ]]; then
+    cat "$set_body" >&2 || true
+    rm -f "$set_body"
+    echo "Failed to accept Community EULA." >&2
+    exit 1
+  fi
+
+  rm -f "$set_body"
+  log "Community EULA accepted."
+}
+
 user_exists() {
   local user_id="$1"
   local users
@@ -371,6 +425,7 @@ fi
 wait_for_nexus_status
 wait_for_bootstrap_password
 configure_bootstrap_password
+ensure_ce_eula_accepted
 ensure_required_users
 configure_anonymous_access
 ensure_pypi_hosted_repo

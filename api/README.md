@@ -151,6 +151,13 @@ pip3 install pydantic httpx
 
 python3 example_client.py
 ```
+```
+pip install \
+    --index-url https://pypi.org/simple \
+    --extra-index-url http://localhost:8083/repository/pypi-public/simple \
+    --trusted-host localhost \
+    employee-cli
+```
 
 ### Install and use the Python library directly in CLI
 ```bash
