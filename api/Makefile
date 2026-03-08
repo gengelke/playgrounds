@@ -5,6 +5,7 @@
 MAKEFILE_DIR   := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PORTS_FILE     ?= $(abspath $(MAKEFILE_DIR)/../ports.env)
 -include $(PORTS_FILE)
+include $(MAKEFILE_DIR)/../scripts/lib/common.mk
 
 VAULT_DIR      ?= $(abspath $(MAKEFILE_DIR)/../vault)
 VENV           := .venv
@@ -27,23 +28,10 @@ export API_PORT
 .PHONY: all
 all: workflow
 
-.PHONY: check-mode
-check-mode:
-	@case "$(MODE)" in \
-		bare|docker) ;; \
-		*) echo "Invalid MODE='$(MODE)'. Use MODE=bare or MODE=docker."; exit 2 ;; \
-	esac
-
 .PHONY: ensure-vault
 ensure-vault: check-mode
-	@set -e; \
-	http_code="$$(curl -s -o /dev/null -w "%{http_code}" "$(VAULT_ADDR)/v1/sys/health" 2>/dev/null || true)"; \
-	if [ -n "$$http_code" ] && [ "$$http_code" != "000" ]; then \
-		echo "Vault reachable at $(VAULT_ADDR) (HTTP $$http_code)"; \
-	else \
-		echo "Vault not reachable at $(VAULT_ADDR); starting $(VAULT_DIR) (MODE=$(MODE))"; \
-		$(MAKE) -C "$(VAULT_DIR)" up MODE="$(MODE)"; \
-	fi
+	@VAULT_ADDR="$(VAULT_ADDR)" VAULT_DIR="$(VAULT_DIR)" MODE="$(MODE)" \
+		bash "$(MAKEFILE_DIR)/../scripts/lib/vault-check.sh"
 
 # ==========================================
 # Workflows
@@ -130,7 +118,7 @@ _up-bare: run-bg
 _down-bare: stop
 
 _codegen-bare: deps
-	bash library-builder/generate-client.sh
+	bash $(MAKEFILE_DIR)library-builder/generate-client.sh
 
 .PHONY: _up-docker _down-docker _codegen-docker
 _up-docker:

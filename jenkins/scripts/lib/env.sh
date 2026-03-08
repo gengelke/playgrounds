@@ -27,6 +27,12 @@ PROD_PIPELINE_GIT_PASSWORD="${PROD_PIPELINE_GIT_PASSWORD:-}"
 DEV_PIPELINE_GIT_CREDENTIALS_ID="${DEV_PIPELINE_GIT_CREDENTIALS_ID:-}"
 DEV_PIPELINE_GIT_USERNAME="${DEV_PIPELINE_GIT_USERNAME:-}"
 DEV_PIPELINE_GIT_PASSWORD="${DEV_PIPELINE_GIT_PASSWORD:-}"
+GENERATE_LIBRARY_PIPELINE_REPO_URL="${GENERATE_LIBRARY_PIPELINE_REPO_URL:-}"
+PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL="${PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL:-}"
+DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL="${DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL:-}"
+GENERATE_LIBRARY_PIPELINE_BRANCH="${GENERATE_LIBRARY_PIPELINE_BRANCH:-}"
+PROD_GENERATE_LIBRARY_PIPELINE_BRANCH="${PROD_GENERATE_LIBRARY_PIPELINE_BRANCH:-}"
+DEV_GENERATE_LIBRARY_PIPELINE_BRANCH="${DEV_GENERATE_LIBRARY_PIPELINE_BRANCH:-}"
 PROD_BRANCH="${PROD_BRANCH:-main}"
 DEV_BRANCH="${DEV_BRANCH:-dev}"
 PIPELINE_SCRIPT_PATH="${PIPELINE_SCRIPT_PATH:-Jenkinsfile}"
@@ -37,10 +43,13 @@ AGENT_COUNT="${AGENT_COUNT:-2}"
 AGENT_EXECUTORS="${AGENT_EXECUTORS:-1}"
 PROD_HTTP_PORT="${PROD_HTTP_PORT:-8081}"
 DEV_HTTP_PORT="${DEV_HTTP_PORT:-8082}"
+PROD_JENKINS_ROOT_URL="${PROD_JENKINS_ROOT_URL:-}"
+DEV_JENKINS_ROOT_URL="${DEV_JENKINS_ROOT_URL:-}"
 JENKINS_ADMIN_USER="${JENKINS_ADMIN_USER:-admin}"
 JENKINS_ADMIN_PASSWORD="${JENKINS_ADMIN_PASSWORD:-password}"
 JENKINS_REGULAR_USER="${JENKINS_REGULAR_USER:-user}"
 JENKINS_REGULAR_PASSWORD="${JENKINS_REGULAR_PASSWORD:-password}"
+JENKINS_CSP="${JENKINS_CSP:-}"
 VAULT_ADDR="${VAULT_ADDR:-}"
 VAULT_TOKEN="${VAULT_TOKEN:-}"
 NEXUS_PYPI_REPO="${NEXUS_PYPI_REPO:-pypi-public}"
@@ -48,7 +57,6 @@ NEXUS_PYPI_REPO="${NEXUS_PYPI_REPO:-pypi-public}"
 CREDENTIALS_DIR="$(to_abs_path "${CREDENTIALS_DIR:-${STATE_DIR}/credentials}")"
 ADMIN_PASSWORD_FILE="$(to_abs_path "${ADMIN_PASSWORD_FILE:-${CREDENTIALS_DIR}/admin-password}")"
 ADMIN_PASSWORD_GENERATED=0
-EXAMPLE_PIPELINE_REPO_DIR="$(to_abs_path "${EXAMPLE_PIPELINE_REPO_DIR:-${STATE_DIR}/repo-a}")"
 
 JENKINS_WAR_URL="${JENKINS_WAR_URL:-https://get.jenkins.io/war-stable/latest/jenkins.war}"
 JENKINS_WAR_PATH="${JENKINS_WAR_PATH:-${CACHE_DIR}/jenkins.war}"
@@ -75,8 +83,8 @@ sync_jenkins_credentials_to_vault() {
     "admin_password" "${JENKINS_ADMIN_PASSWORD}" \
     "regular_user" "${JENKINS_REGULAR_USER}" \
     "regular_password" "${JENKINS_REGULAR_PASSWORD}" \
-    "prod_url" "$(instance_base_url "prod")" \
-    "dev_url" "$(instance_base_url "dev")"; then
+    "prod_url" "$(resolve_instance_root_url "prod")" \
+    "dev_url" "$(resolve_instance_root_url "dev")"; then
     echo "Warning: failed to sync Jenkins credentials to Vault."
   fi
 }
@@ -118,75 +126,6 @@ print_admin_credentials() {
   fi
 }
 
-write_example_jenkinsfile() {
-  local file_path="${1:-${EXAMPLE_PIPELINE_REPO_DIR}/Jenkinsfile}"
-  cat > "${file_path}" <<'EOF'
-pipeline {
-  agent { label 'linux' }
-  stages {
-    stage('Hello') {
-      steps {
-        echo 'hello world'
-      }
-    }
-  }
-}
-EOF
-}
-
-ensure_example_pipeline_repo() {
-  mkdir -p "${EXAMPLE_PIPELINE_REPO_DIR}"
-
-  if [[ ! -d "${EXAMPLE_PIPELINE_REPO_DIR}/.git" ]]; then
-    git init "${EXAMPLE_PIPELINE_REPO_DIR}" >/dev/null
-  fi
-
-  (
-    cd "${EXAMPLE_PIPELINE_REPO_DIR}"
-    git config user.name "Jenkins Bootstrap"
-    git config user.email "jenkins-bootstrap@example.local"
-
-    if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
-      git checkout -B main >/dev/null 2>&1
-      write_example_jenkinsfile "${PWD}/Jenkinsfile"
-      git add Jenkinsfile
-      git commit -m "Add example Jenkinsfile" >/dev/null
-      git branch -f dev main >/dev/null
-      git checkout main >/dev/null 2>&1
-      return
-    fi
-
-    git checkout -B main >/dev/null 2>&1
-    write_example_jenkinsfile "${PWD}/Jenkinsfile"
-    if ! git diff --quiet -- Jenkinsfile >/dev/null 2>&1; then
-      git add Jenkinsfile
-      git commit -m "Update example Jenkinsfile" >/dev/null
-    fi
-    git branch -f dev main >/dev/null
-    git checkout main >/dev/null 2>&1
-  )
-}
-
-resolve_pipeline_repo_url() {
-  local mode="$1"
-
-  if [[ -n "${PIPELINE_REPO_URL}" ]]; then
-    printf '%s' "${PIPELINE_REPO_URL}"
-    return
-  fi
-
-  ensure_example_pipeline_repo
-
-  case "$mode" in
-    docker) printf 'file:///opt/pipeline-repo' ;;
-    bare) printf 'file://%s' "${EXAMPLE_PIPELINE_REPO_DIR}" ;;
-    *)
-      echo "unknown mode: ${mode}" >&2
-      return 1
-      ;;
-  esac
-}
-
 resolve_instance_pipeline_repo_url() {
   local mode="$1"
   local instance="$2"
@@ -222,6 +161,71 @@ resolve_instance_pipeline_repo_url() {
       esac
       return
       ;;
+    *)
+      echo "unknown instance: ${instance}" >&2
+      return 1
+      ;;
+  esac
+}
+
+resolve_instance_generate_library_pipeline_repo_url() {
+  local mode="$1"
+  local instance="$2"
+
+  if [[ -n "${GENERATE_LIBRARY_PIPELINE_REPO_URL}" ]]; then
+    printf '%s' "${GENERATE_LIBRARY_PIPELINE_REPO_URL}"
+    return
+  fi
+
+  case "$instance" in
+    prod)
+      if [[ -n "${PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL}" ]]; then
+        printf '%s' "${PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL}"
+        return
+      fi
+      case "$mode" in
+        docker) printf 'http://host.docker.internal:3000/myuser/generate-library' ;;
+        bare) printf 'http://127.0.0.1:3000/myuser/generate-library' ;;
+        *)
+          echo "unknown mode: ${mode}" >&2
+          return 1
+          ;;
+      esac
+      return
+      ;;
+    dev)
+      if [[ -n "${DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL}" ]]; then
+        printf '%s' "${DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL}"
+        return
+      fi
+      case "$mode" in
+        docker) printf 'http://host.docker.internal:3000/myuser/generate-library' ;;
+        bare) printf 'http://127.0.0.1:3000/myuser/generate-library' ;;
+        *)
+          echo "unknown mode: ${mode}" >&2
+          return 1
+          ;;
+      esac
+      return
+      ;;
+    *)
+      echo "unknown instance: ${instance}" >&2
+      return 1
+      ;;
+  esac
+}
+
+resolve_instance_generate_library_pipeline_branch() {
+  local instance="$1"
+
+  if [[ -n "${GENERATE_LIBRARY_PIPELINE_BRANCH}" ]]; then
+    printf '%s' "${GENERATE_LIBRARY_PIPELINE_BRANCH}"
+    return
+  fi
+
+  case "$instance" in
+    prod) printf '%s' "${PROD_GENERATE_LIBRARY_PIPELINE_BRANCH:-${PROD_BRANCH}}" ;;
+    dev) printf '%s' "${DEV_GENERATE_LIBRARY_PIPELINE_BRANCH:-${DEV_BRANCH}}" ;;
     *)
       echo "unknown instance: ${instance}" >&2
       return 1
@@ -369,8 +373,8 @@ print_pipeline_configuration() {
 
 print_instance_urls() {
   echo "Jenkins instance URLs:"
-  echo "  jenkins-prod: $(instance_base_url "prod")"
-  echo "  jenkins-dev:  $(instance_base_url "dev")"
+  echo "  jenkins-prod: $(resolve_instance_root_url "prod")"
+  echo "  jenkins-dev:  $(resolve_instance_root_url "dev")"
 }
 
 instance_name() {
@@ -405,6 +409,30 @@ instance_branch() {
 instance_base_url() {
   local instance="$1"
   printf 'http://127.0.0.1:%s/' "$(instance_http_port "$instance")"
+}
+
+resolve_instance_root_url() {
+  local instance="$1"
+  local value=""
+
+  case "$instance" in
+    prod) value="${PROD_JENKINS_ROOT_URL:-}" ;;
+    dev) value="${DEV_JENKINS_ROOT_URL:-}" ;;
+    *)
+      echo "unknown instance: ${instance}" >&2
+      return 1
+      ;;
+  esac
+
+  if [[ -z "$value" ]]; then
+    value="$(instance_base_url "$instance")"
+  fi
+
+  if [[ "$value" != */ ]]; then
+    value="${value}/"
+  fi
+
+  printf '%s' "$value"
 }
 
 instance_dir() {

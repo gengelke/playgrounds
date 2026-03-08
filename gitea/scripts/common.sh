@@ -163,16 +163,16 @@ sync_credentials_to_vault() {
   if ! "$vault_helper" "services/gitea" \
     "mode" "${MODE:-unknown}" \
     "root_url" "$gitea_root_url" \
-    "admin_user" "$GITEA_ADMIN_USER" \
-    "admin_email" "$GITEA_ADMIN_EMAIL" \
-    "admin_password" "$GITEA_ADMIN_PASSWORD" \
-    "user" "$GITEA_USER" \
-    "user_email" "$GITEA_USER_EMAIL" \
-    "user_password" "$GITEA_USER_PASSWORD" \
-    "runner_registration_token" "$GITEA_RUNNER_TOKEN" \
-    "secret_key" "$GITEA_SECRET_KEY" \
-    "internal_token" "$GITEA_INTERNAL_TOKEN" \
-    "jwt_secret" "$GITEA_JWT_SECRET"; then
+    "admin_user" "${GITEA_ADMIN_USER:-}" \
+    "admin_email" "${GITEA_ADMIN_EMAIL:-}" \
+    "admin_password" "${GITEA_ADMIN_PASSWORD:-}" \
+    "user" "${GITEA_USER:-}" \
+    "user_email" "${GITEA_USER_EMAIL:-}" \
+    "user_password" "${GITEA_USER_PASSWORD:-}" \
+    "runner_registration_token" "${GITEA_RUNNER_TOKEN:-}" \
+    "secret_key" "${GITEA_SECRET_KEY:-}" \
+    "internal_token" "${GITEA_INTERNAL_TOKEN:-}" \
+    "jwt_secret" "${GITEA_JWT_SECRET:-}"; then
     log "Warning: failed to sync Gitea credentials to Vault."
   fi
 }
@@ -185,15 +185,11 @@ prepare_bootstrap_env() {
 
   local explicit_admin_password=0
   local explicit_user_password=0
-  local explicit_runner_token=0
   if [[ -n "${GITEA_ADMIN_PASSWORD:-}" ]]; then
     explicit_admin_password=1
   fi
   if [[ -n "${GITEA_USER_PASSWORD:-}" ]]; then
     explicit_user_password=1
-  fi
-  if [[ -n "${GITEA_RUNNER_TOKEN:-}" ]]; then
-    explicit_runner_token=1
   fi
 
   local from_file
@@ -222,17 +218,9 @@ prepare_bootstrap_env() {
       GITEA_USER_EMAIL="myuser@example.com"
     fi
   fi
-  if [[ -z "${GITEA_RUNNER_TOKEN:-}" ]]; then
-    from_file="$(envfile_get "$env_file" "GITEA_RUNNER_TOKEN" || true)"
-    if [[ -n "$from_file" ]]; then
-      GITEA_RUNNER_TOKEN="$from_file"
-    else
-      GITEA_RUNNER_TOKEN="$(random_string 48)"
-      envfile_set "$env_file" "GITEA_RUNNER_TOKEN" "$GITEA_RUNNER_TOKEN"
-      log "Generated runner registration token."
-    fi
-  fi
-
+  # Bootstrap with a non-default registration token; the authoritative token
+  # used for runner registration is generated from Gitea after startup.
+  GITEA_RUNNER_TOKEN="$(random_string 48)"
   if [[ -z "${GITEA_SECRET_KEY:-}" ]]; then
     from_file="$(envfile_get "$env_file" "GITEA_SECRET_KEY" || true)"
     if [[ -n "$from_file" ]]; then
@@ -274,12 +262,9 @@ prepare_bootstrap_env() {
   export GITEA_USER
   export GITEA_USER_EMAIL
   export GITEA_USER_PASSWORD
-  export GITEA_RUNNER_TOKEN
   export GITEA_SECRET_KEY
   export GITEA_INTERNAL_TOKEN
   export GITEA_JWT_SECRET
-
-  sync_credentials_to_vault
 
   if (( explicit_admin_password == 0 )); then
     log "Admin login username: ${GITEA_ADMIN_USER}"
@@ -289,12 +274,72 @@ prepare_bootstrap_env() {
     log "User login username: ${GITEA_USER}"
     log "User login password: ${GITEA_USER_PASSWORD}"
   fi
-  if (( explicit_runner_token == 0 )); then
-    log "Runner registration token: ${GITEA_RUNNER_TOKEN}"
-  fi
-  if (( explicit_admin_password == 0 || explicit_user_password == 0 || explicit_runner_token == 0 )); then
+  if (( explicit_admin_password == 0 || explicit_user_password == 0 )); then
     log "Persisted bootstrap values in: ${env_file}"
   fi
+}
+
+ensure_standard_users() {
+  local -a gitea_cli=("$@")
+
+  local admin_user="${GITEA_ADMIN_USER:-admin}"
+  local admin_password="${GITEA_ADMIN_PASSWORD:-password}"
+  local admin_email="${GITEA_ADMIN_EMAIL:-admin@example.com}"
+  local user_name="${GITEA_USER:-myuser}"
+  local user_password="${GITEA_USER_PASSWORD:-password}"
+  local user_email="${GITEA_USER_EMAIL:-myuser@example.com}"
+
+  log "Ensuring admin user '${admin_user}' exists"
+  ensure_user_exists \
+    "${gitea_cli[@]}" admin user create \
+    --username "$admin_user" \
+    --password "$admin_password" \
+    --email "$admin_email" \
+    --admin \
+    --must-change-password=false
+
+  log "Setting admin password for '${admin_user}'"
+  "${gitea_cli[@]}" admin user change-password \
+    --username "$admin_user" \
+    --password "$admin_password" \
+    --must-change-password=false
+
+  log "Ensuring user '${user_name}' exists"
+  ensure_user_exists \
+    "${gitea_cli[@]}" admin user create \
+    --username "$user_name" \
+    --password "$user_password" \
+    --email "$user_email" \
+    --must-change-password=false
+
+  log "Setting password for user '${user_name}'"
+  "${gitea_cli[@]}" admin user change-password \
+    --username "$user_name" \
+    --password "$user_password" \
+    --must-change-password=false
+}
+
+generate_and_persist_runner_token() {
+  local env_file="$1"
+  shift
+  local -a gitea_cli=("$@")
+
+  local runner_token
+  runner_token="$("${gitea_cli[@]}" actions generate-runner-token | tr -d '\r\n')"
+  [[ -n "$runner_token" ]] || die "Failed to generate runner registration token from Gitea"
+
+  GITEA_RUNNER_TOKEN="$runner_token"
+  export GITEA_RUNNER_TOKEN
+  envfile_set "$env_file" "GITEA_RUNNER_TOKEN" "$GITEA_RUNNER_TOKEN"
+  sync_credentials_to_vault
+  log "Generated and persisted runner registration token from Gitea."
+}
+
+ensure_bootstrap_repositories() {
+  remove_example_workflow_repo
+  ensure_example_workflow_repo
+  ensure_jenkins_example_repo
+  ensure_generate_library_repo
 }
 
 ensure_example_workflow_repo() {

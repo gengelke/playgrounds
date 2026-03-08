@@ -2,9 +2,10 @@
 name = "employee-cli"
 version = "0.1.0"
 description = "CLI for GraphQL employee API"
+requires-python = ">=3.9"
 dependencies = [
-    "pydantic",
-    "httpx"
+    "pydantic>=2.0",
+    "httpx>=0.23"
 ]
 
 [project.scripts]

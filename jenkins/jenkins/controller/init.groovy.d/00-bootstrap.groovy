@@ -9,6 +9,7 @@ import hudson.slaves.DumbSlave
 import hudson.slaves.JNLPLauncher
 import hudson.slaves.RetentionStrategy
 import jenkins.model.Jenkins
+import jenkins.model.JenkinsLocationConfiguration
 
 import java.util.LinkedList
 
@@ -24,13 +25,7 @@ def pipelineAuthToken = env.getOrDefault("PIPELINE_AUTH_TOKEN", "example-pipelin
 def pipelineGitCredentialsId = env.getOrDefault("PIPELINE_GIT_CREDENTIALS_ID", "").trim()
 def pipelineGitUsername = env.getOrDefault("PIPELINE_GIT_USERNAME", "").trim()
 def pipelineGitPassword = env.getOrDefault("PIPELINE_GIT_PASSWORD", "")
-def deriveGenerateLibraryRepoUrl = { String repoUrl ->
-  if (!repoUrl?.trim()) {
-    return repoUrl
-  }
-  return repoUrl.replace("/jenkins-example", "/generate-library")
-}
-def generateLibraryPipelineRepoUrl = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_REPO_URL", deriveGenerateLibraryRepoUrl(pipelineRepoUrl))
+def generateLibraryPipelineRepoUrl = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_REPO_URL", "http://host.docker.internal:3000/myuser/generate-library")
 def generateLibraryPipelineBranch = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_BRANCH", pipelineBranch)
 def generateLibraryPipelineScriptPath = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_SCRIPT_PATH", pipelineScriptPath)
 def generateLibraryPipelineJobName = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_JOB_NAME", "generate-library")
@@ -45,9 +40,16 @@ def adminUser = env.getOrDefault("JENKINS_ADMIN_USER", "admin")
 def adminPassword = env.getOrDefault("JENKINS_ADMIN_PASSWORD", "password")
 def regularUser = env.getOrDefault("JENKINS_REGULAR_USER", "user")
 def regularPassword = env.getOrDefault("JENKINS_REGULAR_PASSWORD", "password")
+def directoryBrowserCsp = env.getOrDefault("JENKINS_CSP", "").trim()
+def jenkinsRootUrl = env.getOrDefault("JENKINS_ROOT_URL", env.getOrDefault("JENKINS_URL", "")).trim()
 def managedDescription = "Managed by repository automation"
 
 println("[bootstrap] configuring ${instanceName}")
+
+if (directoryBrowserCsp && System.getProperty("hudson.model.DirectoryBrowserSupport.CSP") != directoryBrowserCsp) {
+  System.setProperty("hudson.model.DirectoryBrowserSupport.CSP", directoryBrowserCsp)
+  println("[bootstrap] configured Directory Browser CSP override")
+}
 
 def optionalClass = { String className ->
   try {
@@ -105,6 +107,16 @@ authStrategy.setAllowAnonymousRead(false)
 jenkins.setAuthorizationStrategy(authStrategy)
 jenkins.setCrumbIssuer(new DefaultCrumbIssuer(true))
 jenkins.setNumExecutors(0)
+
+if (jenkinsRootUrl) {
+  def normalizedRootUrl = jenkinsRootUrl.endsWith("/") ? jenkinsRootUrl : "${jenkinsRootUrl}/"
+  def locationConfig = JenkinsLocationConfiguration.get()
+  if (locationConfig.getUrl() != normalizedRootUrl) {
+    locationConfig.setUrl(normalizedRootUrl)
+    locationConfig.save()
+    println("[bootstrap] configured Jenkins root URL ${normalizedRootUrl}")
+  }
+}
 
 Set<String> desiredNodeNames = new LinkedHashSet<>()
 (1..agentCount).each { index ->

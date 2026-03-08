@@ -16,6 +16,12 @@ require_command() {
 require_command "$JAVA_BIN"
 require_command "$CURL_BIN"
 
+java_major="$("$JAVA_BIN" -version 2>&1 | sed -nE '1{s/.* version "([0-9]+).*/\1/p}')"
+if [[ -z "$java_major" || "$java_major" -lt 21 ]]; then
+  echo "Java 21+ is required for Jenkins bare mode. Detected: ${java_major:-unknown}" >&2
+  exit 1
+fi
+
 mkdir -p "$CACHE_DIR" "$BARE_STATE_DIR"
 
 if [[ ! -f "$JENKINS_WAR_PATH" ]]; then

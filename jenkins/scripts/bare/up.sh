@@ -25,7 +25,8 @@ fi
 
 start_controller() {
   local instance="$1"
-  local name branch port base_url home_dir logs_dir pid_file log_file repo_url git_credentials_id git_username git_password
+  local name branch port base_url root_url home_dir logs_dir pid_file log_file repo_url git_credentials_id git_username git_password
+  local generate_library_repo_url generate_library_branch
 
   name="$(instance_name "$instance")"
   branch="$(instance_branch "$instance")"
@@ -33,8 +34,11 @@ start_controller() {
   git_credentials_id="$(resolve_instance_pipeline_git_credentials_id bare "$instance")"
   git_username="$(resolve_instance_pipeline_git_username bare "$instance")"
   git_password="$(resolve_instance_pipeline_git_password bare "$instance")"
+  generate_library_repo_url="$(resolve_instance_generate_library_pipeline_repo_url bare "$instance")"
+  generate_library_branch="$(resolve_instance_generate_library_pipeline_branch "$instance")"
   port="$(instance_http_port "$instance")"
   base_url="$(instance_base_url "$instance")"
+  root_url="$(resolve_instance_root_url "$instance")"
   home_dir="$(instance_home "$instance")"
   logs_dir="$(instance_logs_dir "$instance")"
   pid_file="$(instance_controller_pid_file "$instance")"
@@ -51,11 +55,14 @@ start_controller() {
   (
     export JENKINS_HOME="$home_dir"
     export JENKINS_INSTANCE_NAME="$name"
+    export JENKINS_ROOT_URL="$root_url"
     export PIPELINE_REPO_URL="$repo_url"
     export PIPELINE_GIT_CREDENTIALS_ID="$git_credentials_id"
     export PIPELINE_GIT_USERNAME="$git_username"
     export PIPELINE_GIT_PASSWORD="$git_password"
     export PIPELINE_BRANCH="$branch"
+    export GENERATE_LIBRARY_PIPELINE_REPO_URL="$generate_library_repo_url"
+    export GENERATE_LIBRARY_PIPELINE_BRANCH="$generate_library_branch"
     export PIPELINE_SCRIPT_PATH="$PIPELINE_SCRIPT_PATH"
     export PIPELINE_JOB_NAME="$PIPELINE_JOB_NAME"
     export PIPELINE_AUTH_TOKEN="$PIPELINE_AUTH_TOKEN"
@@ -65,6 +72,7 @@ start_controller() {
     export JENKINS_ADMIN_PASSWORD="$JENKINS_ADMIN_PASSWORD"
     export JENKINS_REGULAR_USER="$JENKINS_REGULAR_USER"
     export JENKINS_REGULAR_PASSWORD="$JENKINS_REGULAR_PASSWORD"
+    export JENKINS_CSP="$JENKINS_CSP"
     export VAULT_ADDR="$VAULT_ADDR"
     export VAULT_TOKEN="$VAULT_TOKEN"
     export NEXUS_PYPI_REPO="$NEXUS_PYPI_REPO"

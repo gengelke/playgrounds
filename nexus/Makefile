@@ -1,6 +1,7 @@
 SHELL := /usr/bin/env bash
 
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+include $(MAKEFILE_DIR)/../scripts/lib/common.mk
 VAULT_DIR ?= $(abspath $(MAKEFILE_DIR)/../vault)
 PORTS_FILE ?= $(abspath $(MAKEFILE_DIR)/../ports.env)
 -include $(PORTS_FILE)
@@ -64,16 +65,10 @@ help:
 	@echo "  NEXUS_DOCKER_PORT_FILE (default: $(NEXUS_DOCKER_PORT_FILE))"
 
 ensure-vault:
-	@set -euo pipefail; \
-	http_code="$$(curl -s -o /dev/null -w "%{http_code}" "$(VAULT_ADDR)/v1/sys/health" 2>/dev/null || true)"; \
-	if [[ -n "$$http_code" && "$$http_code" != "000" ]]; then \
-		echo "Vault reachable at $(VAULT_ADDR) (HTTP $$http_code)"; \
-	else \
-		echo "Vault not reachable at $(VAULT_ADDR); starting $(VAULT_DIR) (MODE=$(MODE))"; \
-		$(MAKE) -C "$(VAULT_DIR)" up MODE="$(MODE)"; \
-	fi
+	@VAULT_ADDR="$(VAULT_ADDR)" VAULT_DIR="$(VAULT_DIR)" MODE="$(MODE)" \
+		bash "$(MAKEFILE_DIR)/../scripts/lib/vault-check.sh"
 
-up: ensure-vault
+up: check-mode ensure-vault
 ifeq ($(MODE),docker)
 	@mkdir -p "$(DOCKER_DATA_DIR)" "$(dir $(NEXUS_DOCKER_PORT_FILE))"
 	@resolved_port="$$(./scripts/resolve-http-port.sh "$(NEXUS_HTTP_PORT)")"; \
@@ -126,42 +121,34 @@ ifeq ($(NEXUS_AUTO_INIT),true)
 	NEXUS_CURL_MAX_TIME="$(NEXUS_CURL_MAX_TIME)" \
 	./scripts/nexus-bootstrap.sh
 endif
-else
-	$(error Unsupported MODE '$(MODE)'. Use MODE=docker or MODE=bare)
 endif
 
-down:
+down: check-mode
 ifeq ($(MODE),docker)
 	NEXUS_HTTP_PORT="$(NEXUS_HTTP_PORT)" $(DOCKER_COMPOSE) down
 	@rm -f "$(NEXUS_DOCKER_PORT_FILE)"
 else ifeq ($(MODE),bare)
 	NEXUS_PID_FILE="$(NEXUS_PID_FILE)" ./scripts/bare-down.sh
-else
-	$(error Unsupported MODE '$(MODE)'. Use MODE=docker or MODE=bare)
 endif
 
 restart:
 	@$(MAKE) down MODE=$(MODE)
 	@$(MAKE) up MODE=$(MODE)
 
-logs:
+logs: check-mode
 ifeq ($(MODE),docker)
 	NEXUS_HTTP_PORT="$(NEXUS_HTTP_PORT)" $(DOCKER_COMPOSE) logs -f nexus
 else ifeq ($(MODE),bare)
 	@mkdir -p "$(dir $(NEXUS_LOG_FILE))"
 	@touch "$(NEXUS_LOG_FILE)"
 	tail -f "$(NEXUS_LOG_FILE)"
-else
-	$(error Unsupported MODE '$(MODE)'. Use MODE=docker or MODE=bare)
 endif
 
-status:
+status: check-mode
 ifeq ($(MODE),docker)
 	NEXUS_HTTP_PORT="$(NEXUS_HTTP_PORT)" $(DOCKER_COMPOSE) ps
 else ifeq ($(MODE),bare)
 	NEXUS_PID_FILE="$(NEXUS_PID_FILE)" ./scripts/bare-status.sh
-else
-	$(error Unsupported MODE '$(MODE)'. Use MODE=docker or MODE=bare)
 endif
 
 clean:

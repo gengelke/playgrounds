@@ -37,57 +37,14 @@ fi
 gitea_http_port="${GITEA_HTTP_PORT:-3000}"
 wait_http "http://127.0.0.1:${gitea_http_port}/api/healthz" 180
 
-admin_user="${GITEA_ADMIN_USER:-admin}"
-admin_password="${GITEA_ADMIN_PASSWORD:-password}"
-admin_email="${GITEA_ADMIN_EMAIL:-admin@example.com}"
-user_name="${GITEA_USER:-myuser}"
-user_password="${GITEA_USER_PASSWORD:-password}"
-user_email="${GITEA_USER_EMAIL:-myuser@example.com}"
+gitea_cli=("$gitea_bin" --config "$gitea_config")
 
-log "Ensuring admin user '${admin_user}' exists"
-ensure_user_exists \
-  "$gitea_bin" --config "$gitea_config" admin user create \
-  --username "$admin_user" \
-  --password "$admin_password" \
-  --email "$admin_email" \
-  --admin \
-  --must-change-password=false
-
-log "Setting admin password for '${admin_user}'"
-"$gitea_bin" --config "$gitea_config" admin user change-password \
-  --username "$admin_user" \
-  --password "$admin_password" \
-  --must-change-password=false
-
-log "Ensuring user '${user_name}' exists"
-ensure_user_exists \
-  "$gitea_bin" --config "$gitea_config" admin user create \
-  --username "$user_name" \
-  --password "$user_password" \
-  --email "$user_email" \
-  --must-change-password=false
-
-log "Setting password for user '${user_name}'"
-"$gitea_bin" --config "$gitea_config" admin user change-password \
-  --username "$user_name" \
-  --password "$user_password" \
-  --must-change-password=false
-
-runner_token="$("$gitea_bin" --config "$gitea_config" actions generate-runner-token | tr -d '\r\n')"
-[[ -n "$runner_token" ]] || die "Failed to generate runner registration token from Gitea"
-GITEA_RUNNER_TOKEN="$runner_token"
-export GITEA_RUNNER_TOKEN
-envfile_set "${ROOT_DIR}/runtime/shared/generated.env" "GITEA_RUNNER_TOKEN" "$GITEA_RUNNER_TOKEN"
-sync_credentials_to_vault
-log "Generated runner registration token from Gitea."
-
-remove_example_workflow_repo
-ensure_example_workflow_repo
-ensure_jenkins_example_repo
-ensure_generate_library_repo
+ensure_standard_users "${gitea_cli[@]}"
+generate_and_persist_runner_token "${ROOT_DIR}/runtime/shared/generated.env" "${gitea_cli[@]}"
+ensure_bootstrap_repositories
 
 instance_url="http://127.0.0.1:${gitea_http_port}"
-runner_labels="${RUNNER_LABELS_BARE:-linux-amd64:host,ubuntu-latest:host}"
+runner_labels="${RUNNER_LABELS_BARE:-linux-amd64:host}"
 
 start_runner() {
   local runner_id="$1"
@@ -107,7 +64,7 @@ start_runner() {
       "$runner_bin" register \
         --no-interactive \
         --instance "$instance_url" \
-        --token "$runner_token" \
+        --token "$GITEA_RUNNER_TOKEN" \
         --name "$runner_name" \
         --labels "$runner_labels"
     )

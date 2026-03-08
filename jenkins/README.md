@@ -22,13 +22,9 @@ Both instances are configured from the same as-code bootstrap script and differ 
 ## Requirements
 
 - Docker mode: Docker with `docker compose`
-- Non-Docker mode: Java 17+ and `curl`
+- Non-Docker mode: Java 21+ and `curl`
 
 ## Quick Start
-
-If `PIPELINE_REPO_URL` is unset, startup automatically creates local **Repo A** at
-`.state/repo-a` (git repository with branches `main` + `dev`) and a `Jenkinsfile`
-that prints `hello world` on an attached agent (`label 'linux'`).
 
 Both Jenkins instances automatically create and run a pipeline job from git:
 
@@ -122,6 +118,10 @@ curl -u admin:password "http://127.0.0.1:8081/job/example-pipeline/build?token=e
 - `PIPELINE_GIT_PASSWORD` (shared optional git password)
 - `PROD_PIPELINE_GIT_CREDENTIALS_ID` / `PROD_PIPELINE_GIT_USERNAME` / `PROD_PIPELINE_GIT_PASSWORD`
 - `DEV_PIPELINE_GIT_CREDENTIALS_ID` / `DEV_PIPELINE_GIT_USERNAME` / `DEV_PIPELINE_GIT_PASSWORD`
+- `GENERATE_LIBRARY_PIPELINE_REPO_URL` (shared optional override for `generate-library`)
+- `PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL` / `DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL`
+- `GENERATE_LIBRARY_PIPELINE_BRANCH` (shared optional branch override)
+- `PROD_GENERATE_LIBRARY_PIPELINE_BRANCH` / `DEV_GENERATE_LIBRARY_PIPELINE_BRANCH`
 - `PROD_BRANCH` (default `main`)
 - `DEV_BRANCH`
 - `PIPELINE_SCRIPT_PATH` (default `Jenkinsfile`)
@@ -131,11 +131,14 @@ curl -u admin:password "http://127.0.0.1:8081/job/example-pipeline/build?token=e
 - `AGENT_EXECUTORS` (default `1`)
 - `PROD_HTTP_PORT` (default `8081`)
 - `DEV_HTTP_PORT` (default `8082`)
+- `PROD_JENKINS_ROOT_URL` (default `http://127.0.0.1:8081/`)
+- `DEV_JENKINS_ROOT_URL` (default `http://127.0.0.1:8082/`)
 - `JENKINS_ADMIN_USER` (default `admin`)
 - `JENKINS_ADMIN_PASSWORD` (default `password`)
 - `JENKINS_REGULAR_USER` (default `user`)
 - `JENKINS_REGULAR_PASSWORD` (default `password`)
 - `JENKINS_REGULAR_API_TOKEN_NAME` (default `jenkins-api-token`)
+- `JENKINS_CSP` (optional override; leave unset to use Jenkins default and avoid DirectoryBrowserSupport.CSP warning)
 - `VAULT_ADDR` (auto-resolved; docker defaults to `http://host.docker.internal:8200`)
 - `VAULT_TOKEN` (auto-resolved from `../vault/.vault/credentials.env` when available)
 - `NEXUS_PYPI_REPO` (optional; default `pypi-public` in the generated Jenkinsfile)

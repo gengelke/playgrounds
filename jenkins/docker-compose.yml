@@ -7,11 +7,14 @@ services:
     environment:
       JENKINS_OPTS: --httpPort=8080 --httpListenAddress=0.0.0.0
       JENKINS_INSTANCE_NAME: jenkins-prod
+      JENKINS_ROOT_URL: ${PROD_JENKINS_ROOT_URL:-http://127.0.0.1:8081/}
       PIPELINE_REPO_URL: ${PROD_PIPELINE_REPO_URL:-http://host.docker.internal:3000/myuser/jenkins-example}
       PIPELINE_GIT_CREDENTIALS_ID: ${PROD_PIPELINE_GIT_CREDENTIALS_ID:-${PIPELINE_GIT_CREDENTIALS_ID:-}}
       PIPELINE_GIT_USERNAME: ${PROD_PIPELINE_GIT_USERNAME:-${PIPELINE_GIT_USERNAME:-}}
       PIPELINE_GIT_PASSWORD: ${PROD_PIPELINE_GIT_PASSWORD:-${PIPELINE_GIT_PASSWORD:-}}
       PIPELINE_BRANCH: ${PROD_BRANCH:-main}
+      GENERATE_LIBRARY_PIPELINE_REPO_URL: ${PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL:-http://host.docker.internal:3000/myuser/generate-library}
+      GENERATE_LIBRARY_PIPELINE_BRANCH: ${PROD_GENERATE_LIBRARY_PIPELINE_BRANCH:-${PROD_BRANCH:-main}}
       PIPELINE_SCRIPT_PATH: ${PIPELINE_SCRIPT_PATH:-Jenkinsfile}
       PIPELINE_JOB_NAME: ${PIPELINE_JOB_NAME:-example-pipeline}
       PIPELINE_AUTH_TOKEN: ${PIPELINE_AUTH_TOKEN:-example-pipeline-auth-token}
@@ -21,6 +24,7 @@ services:
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-password}
       JENKINS_REGULAR_USER: ${JENKINS_REGULAR_USER:-user}
       JENKINS_REGULAR_PASSWORD: ${JENKINS_REGULAR_PASSWORD:-password}
+      JENKINS_CSP: ${JENKINS_CSP:-}
       VAULT_ADDR: ${VAULT_ADDR:-http://host.docker.internal:8200}
       VAULT_TOKEN: ${VAULT_TOKEN:-}
       NEXUS_PYPI_REPO: ${NEXUS_PYPI_REPO:-pypi-public}
@@ -28,7 +32,6 @@ services:
       - "${PROD_HTTP_PORT:-8081}:8080"
     volumes:
       - ./.state/docker/jenkins-prod:/var/jenkins_home
-      - ./.state/repo-a:/opt/pipeline-repo:ro
     networks:
       - jenkins-net
 
@@ -40,11 +43,14 @@ services:
     environment:
       JENKINS_OPTS: --httpPort=8080 --httpListenAddress=0.0.0.0
       JENKINS_INSTANCE_NAME: jenkins-dev
+      JENKINS_ROOT_URL: ${DEV_JENKINS_ROOT_URL:-http://127.0.0.1:8082/}
       PIPELINE_REPO_URL: ${DEV_PIPELINE_REPO_URL:-http://host.docker.internal:3000/myuser/jenkins-example}
       PIPELINE_GIT_CREDENTIALS_ID: ${DEV_PIPELINE_GIT_CREDENTIALS_ID:-${PIPELINE_GIT_CREDENTIALS_ID:-}}
       PIPELINE_GIT_USERNAME: ${DEV_PIPELINE_GIT_USERNAME:-${PIPELINE_GIT_USERNAME:-}}
       PIPELINE_GIT_PASSWORD: ${DEV_PIPELINE_GIT_PASSWORD:-${PIPELINE_GIT_PASSWORD:-}}
       PIPELINE_BRANCH: ${DEV_BRANCH:-dev}
+      GENERATE_LIBRARY_PIPELINE_REPO_URL: ${DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL:-http://host.docker.internal:3000/myuser/generate-library}
+      GENERATE_LIBRARY_PIPELINE_BRANCH: ${DEV_GENERATE_LIBRARY_PIPELINE_BRANCH:-${DEV_BRANCH:-dev}}
       PIPELINE_SCRIPT_PATH: ${PIPELINE_SCRIPT_PATH:-Jenkinsfile}
       PIPELINE_JOB_NAME: ${PIPELINE_JOB_NAME:-example-pipeline}
       PIPELINE_AUTH_TOKEN: ${PIPELINE_AUTH_TOKEN:-example-pipeline-auth-token}
@@ -54,6 +60,7 @@ services:
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-password}
       JENKINS_REGULAR_USER: ${JENKINS_REGULAR_USER:-user}
       JENKINS_REGULAR_PASSWORD: ${JENKINS_REGULAR_PASSWORD:-password}
+      JENKINS_CSP: ${JENKINS_CSP:-}
       VAULT_ADDR: ${VAULT_ADDR:-http://host.docker.internal:8200}
       VAULT_TOKEN: ${VAULT_TOKEN:-}
       NEXUS_PYPI_REPO: ${NEXUS_PYPI_REPO:-pypi-public}
@@ -61,7 +68,6 @@ services:
       - "${DEV_HTTP_PORT:-8082}:8080"
     volumes:
       - ./.state/docker/jenkins-dev:/var/jenkins_home
-      - ./.state/repo-a:/opt/pipeline-repo:ro
     networks:
       - jenkins-net
 
@@ -80,7 +86,6 @@ services:
       NEXUS_PYPI_REPO: ${NEXUS_PYPI_REPO:-pypi-public}
     volumes:
       - ./.state/docker/jenkins-prod-agent-1:/home/jenkins/agent
-      - ./.state/repo-a:/opt/pipeline-repo:ro
     depends_on:
       - jenkins-prod
     networks:
@@ -101,7 +106,6 @@ services:
       NEXUS_PYPI_REPO: ${NEXUS_PYPI_REPO:-pypi-public}
     volumes:
       - ./.state/docker/jenkins-prod-agent-2:/home/jenkins/agent
-      - ./.state/repo-a:/opt/pipeline-repo:ro
     depends_on:
       - jenkins-prod
     networks:
@@ -122,7 +126,6 @@ services:
       NEXUS_PYPI_REPO: ${NEXUS_PYPI_REPO:-pypi-public}
     volumes:
       - ./.state/docker/jenkins-dev-agent-1:/home/jenkins/agent
-      - ./.state/repo-a:/opt/pipeline-repo:ro
     depends_on:
       - jenkins-dev
     networks:
@@ -143,7 +146,6 @@ services:
       NEXUS_PYPI_REPO: ${NEXUS_PYPI_REPO:-pypi-public}
     volumes:
       - ./.state/docker/jenkins-dev-agent-2:/home/jenkins/agent
-      - ./.state/repo-a:/opt/pipeline-repo:ro
     depends_on:
       - jenkins-dev
     networks:

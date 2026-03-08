@@ -1,6 +1,7 @@
 SHELL := /usr/bin/env bash
 
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+include $(MAKEFILE_DIR)/../scripts/lib/common.mk
 VAULT_DIR ?= $(abspath $(MAKEFILE_DIR)/../vault)
 PORTS_FILE ?= $(abspath $(MAKEFILE_DIR)/../ports.env)
 -include $(PORTS_FILE)
@@ -21,6 +22,12 @@ PROD_PIPELINE_GIT_PASSWORD ?=
 DEV_PIPELINE_GIT_CREDENTIALS_ID ?=
 DEV_PIPELINE_GIT_USERNAME ?=
 DEV_PIPELINE_GIT_PASSWORD ?=
+GENERATE_LIBRARY_PIPELINE_REPO_URL ?=
+PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL ?=
+DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL ?=
+GENERATE_LIBRARY_PIPELINE_BRANCH ?=
+PROD_GENERATE_LIBRARY_PIPELINE_BRANCH ?=
+DEV_GENERATE_LIBRARY_PIPELINE_BRANCH ?=
 PROD_BRANCH ?= main
 DEV_BRANCH ?= dev
 PIPELINE_SCRIPT_PATH ?= Jenkinsfile
@@ -33,11 +40,14 @@ JENKINS_ADMIN_PASSWORD ?= password
 JENKINS_REGULAR_USER ?= user
 JENKINS_REGULAR_PASSWORD ?= password
 JENKINS_REGULAR_API_TOKEN_NAME ?= jenkins-api-token
+JENKINS_CSP ?=
 VAULT_TOKEN ?=
 NEXUS_PYPI_REPO ?= pypi-public
 
 PROD_HTTP_PORT ?= 8081
 DEV_HTTP_PORT ?= 8082
+PROD_JENKINS_ROOT_URL ?= http://127.0.0.1:$(PROD_HTTP_PORT)/
+DEV_JENKINS_ROOT_URL ?= http://127.0.0.1:$(DEV_HTTP_PORT)/
 
 STATE_DIR ?= .state
 
@@ -45,10 +55,13 @@ export PIPELINE_REPO_URL PROD_PIPELINE_REPO_URL DEV_PIPELINE_REPO_URL
 export PIPELINE_GIT_CREDENTIALS_ID PIPELINE_GIT_USERNAME PIPELINE_GIT_PASSWORD
 export PROD_PIPELINE_GIT_CREDENTIALS_ID PROD_PIPELINE_GIT_USERNAME PROD_PIPELINE_GIT_PASSWORD
 export DEV_PIPELINE_GIT_CREDENTIALS_ID DEV_PIPELINE_GIT_USERNAME DEV_PIPELINE_GIT_PASSWORD
+export GENERATE_LIBRARY_PIPELINE_REPO_URL PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL
+export GENERATE_LIBRARY_PIPELINE_BRANCH PROD_GENERATE_LIBRARY_PIPELINE_BRANCH DEV_GENERATE_LIBRARY_PIPELINE_BRANCH
 export PROD_BRANCH DEV_BRANCH PIPELINE_SCRIPT_PATH PIPELINE_JOB_NAME PIPELINE_AUTH_TOKEN
 export AGENT_COUNT AGENT_EXECUTORS PROD_HTTP_PORT DEV_HTTP_PORT
+export PROD_JENKINS_ROOT_URL DEV_JENKINS_ROOT_URL
 export JENKINS_ADMIN_USER JENKINS_ADMIN_PASSWORD JENKINS_REGULAR_USER JENKINS_REGULAR_PASSWORD
-export JENKINS_REGULAR_API_TOKEN_NAME STATE_DIR
+export JENKINS_REGULAR_API_TOKEN_NAME JENKINS_CSP STATE_DIR
 export VAULT_ADDR VAULT_TOKEN NEXUS_PYPI_REPO
 
 .PHONY: help up down restart logs status clean distclean \
@@ -69,9 +82,12 @@ help:
 	@echo "  make bare-setup|bare-up|bare-down|bare-logs|bare-status|bare-clean"
 	@echo ""
 	@echo "Key variables:"
-	@echo "  PIPELINE_REPO_URL=$(if $(PIPELINE_REPO_URL),$(PIPELINE_REPO_URL),<auto repo-a>)"
+	@echo "  PIPELINE_REPO_URL=$(if $(PIPELINE_REPO_URL),$(PIPELINE_REPO_URL),<default gitea /myuser/jenkins-example>)"
 	@echo "  PROD_PIPELINE_REPO_URL=$(if $(PROD_PIPELINE_REPO_URL),$(PROD_PIPELINE_REPO_URL),<default gitea /myuser/jenkins-example>)"
 	@echo "  DEV_PIPELINE_REPO_URL=$(if $(DEV_PIPELINE_REPO_URL),$(DEV_PIPELINE_REPO_URL),<default gitea /myuser/jenkins-example>)"
+	@echo "  GENERATE_LIBRARY_PIPELINE_REPO_URL=$(if $(GENERATE_LIBRARY_PIPELINE_REPO_URL),$(GENERATE_LIBRARY_PIPELINE_REPO_URL),<default gitea /myuser/generate-library>)"
+	@echo "  PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL=$(if $(PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL),$(PROD_GENERATE_LIBRARY_PIPELINE_REPO_URL),<uses GENERATE_LIBRARY_PIPELINE_REPO_URL>)"
+	@echo "  DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL=$(if $(DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL),$(DEV_GENERATE_LIBRARY_PIPELINE_REPO_URL),<uses GENERATE_LIBRARY_PIPELINE_REPO_URL>)"
 	@echo "  PROD_PIPELINE_GIT_CREDENTIALS_ID=$(if $(PROD_PIPELINE_GIT_CREDENTIALS_ID),$(PROD_PIPELINE_GIT_CREDENTIALS_ID),<auto pipeline-git-prod when user/password available>)"
 	@echo "  PROD_PIPELINE_GIT_USERNAME=$(if $(PROD_PIPELINE_GIT_USERNAME),$(PROD_PIPELINE_GIT_USERNAME),<auto from gitea/runtime/shared/generated.env>)"
 	@echo "  PROD_PIPELINE_GIT_PASSWORD=<hidden>"
@@ -86,44 +102,39 @@ help:
 	@echo "  PIPELINE_AUTH_TOKEN=$(PIPELINE_AUTH_TOKEN)"
 	@echo "  AGENT_COUNT=$(AGENT_COUNT), AGENT_EXECUTORS=$(AGENT_EXECUTORS)"
 	@echo "  PROD_HTTP_PORT=$(PROD_HTTP_PORT), DEV_HTTP_PORT=$(DEV_HTTP_PORT)"
+	@echo "  PROD_JENKINS_ROOT_URL=$(PROD_JENKINS_ROOT_URL)"
+	@echo "  DEV_JENKINS_ROOT_URL=$(DEV_JENKINS_ROOT_URL)"
 	@echo "  JENKINS_ADMIN_USER=$(JENKINS_ADMIN_USER)"
 	@echo "  JENKINS_REGULAR_USER=$(JENKINS_REGULAR_USER)"
 	@echo "  JENKINS_REGULAR_API_TOKEN_NAME=$(JENKINS_REGULAR_API_TOKEN_NAME)"
+	@echo "  JENKINS_CSP=$(JENKINS_CSP)"
 
-up:
+up: check-mode
 	@if [[ "$(MODE)" == "docker" ]]; then \
 		$(MAKE) docker-up; \
-	elif [[ "$(MODE)" == "bare" ]]; then \
-		$(MAKE) bare-up; \
 	else \
-		echo "Invalid MODE=$(MODE). Use docker or bare."; exit 1; \
+		$(MAKE) bare-up; \
 	fi
 
-down:
+down: check-mode
 	@if [[ "$(MODE)" == "docker" ]]; then \
 		$(MAKE) docker-down; \
-	elif [[ "$(MODE)" == "bare" ]]; then \
-		$(MAKE) bare-down; \
 	else \
-		echo "Invalid MODE=$(MODE). Use docker or bare."; exit 1; \
+		$(MAKE) bare-down; \
 	fi
 
-logs:
+logs: check-mode
 	@if [[ "$(MODE)" == "docker" ]]; then \
 		$(MAKE) docker-logs; \
-	elif [[ "$(MODE)" == "bare" ]]; then \
-		$(MAKE) bare-logs; \
 	else \
-		echo "Invalid MODE=$(MODE). Use docker or bare."; exit 1; \
+		$(MAKE) bare-logs; \
 	fi
 
-status:
+status: check-mode
 	@if [[ "$(MODE)" == "docker" ]]; then \
 		$(MAKE) docker-status; \
-	elif [[ "$(MODE)" == "bare" ]]; then \
-		$(MAKE) bare-status; \
 	else \
-		echo "Invalid MODE=$(MODE). Use docker or bare."; exit 1; \
+		$(MAKE) bare-status; \
 	fi
 
 restart:
@@ -131,14 +142,8 @@ restart:
 	@$(MAKE) up MODE=$(MODE)
 
 ensure-vault:
-	@set -euo pipefail; \
-	http_code="$$(curl -s -o /dev/null -w "%{http_code}" "$(VAULT_ADDR)/v1/sys/health" 2>/dev/null || true)"; \
-	if [[ -n "$$http_code" && "$$http_code" != "000" ]]; then \
-		echo "Vault reachable at $(VAULT_ADDR) (HTTP $$http_code)"; \
-	else \
-		echo "Vault not reachable at $(VAULT_ADDR); starting $(VAULT_DIR) (MODE=$(MODE))"; \
-		$(MAKE) -C "$(VAULT_DIR)" up MODE="$(MODE)"; \
-	fi
+	@VAULT_ADDR="$(VAULT_ADDR)" VAULT_DIR="$(VAULT_DIR)" MODE="$(MODE)" \
+		bash "$(MAKEFILE_DIR)/../scripts/lib/vault-check.sh"
 
 docker-up: ensure-vault
 	@set -euo pipefail; \
@@ -158,7 +163,6 @@ docker-up: ensure-vault
 	mkdir -p $(STATE_DIR)/docker/jenkins-prod/init.groovy.d $(STATE_DIR)/docker/jenkins-dev/init.groovy.d; \
 	mkdir -p $(STATE_DIR)/docker/jenkins-prod-agent-1 $(STATE_DIR)/docker/jenkins-prod-agent-2; \
 	mkdir -p $(STATE_DIR)/docker/jenkins-dev-agent-1 $(STATE_DIR)/docker/jenkins-dev-agent-2; \
-	mkdir -p $(STATE_DIR)/repo-a; \
 	cp jenkins/controller/init.groovy.d/00-bootstrap.groovy $(STATE_DIR)/docker/jenkins-prod/init.groovy.d/00-bootstrap.groovy; \
 	cp jenkins/controller/init.groovy.d/00-bootstrap.groovy $(STATE_DIR)/docker/jenkins-dev/init.groovy.d/00-bootstrap.groovy; \
 	PROD_PIPELINE_REPO_URL="$$prod_repo_url" \

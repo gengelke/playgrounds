@@ -4,6 +4,17 @@ SHELL := /usr/bin/env bash
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PORTS_FILE ?= $(abspath $(MAKEFILE_DIR)/../ports.env)
 -include $(PORTS_FILE)
+include $(MAKEFILE_DIR)/../scripts/lib/common.mk
+
+NGINX_HTTP_PORT   ?= 80
+NGINX_HTTPS_PORT  ?= 443
+PROD_HTTP_PORT    ?= 8081
+DEV_HTTP_PORT     ?= 8082
+API_PORT          ?= 8000
+GITEA_HTTP_PORT   ?= 3000
+GITLAB_HTTP_PORT  ?= 8929
+NEXUS_HTTP_PORT   ?= 8083
+VAULT_PORT        ?= 8200
 
 MODE ?= docker
 DOCKER_COMPOSE ?= docker compose -f docker-compose.yml
@@ -11,12 +22,6 @@ DOCKER_COMPOSE ?= docker compose -f docker-compose.yml
 export NGINX_HTTP_PORT PROD_HTTP_PORT DEV_HTTP_PORT API_PORT GITEA_HTTP_PORT GITLAB_HTTP_PORT NEXUS_HTTP_PORT VAULT_PORT
 
 .PHONY: help up down restart logs status check-mode check-port-conflict
-
-check-mode:
-	@if [[ "$(MODE)" != "docker" && "$(MODE)" != "bare" ]]; then \
-		echo "Unsupported MODE='$(MODE)'. Use MODE=docker or MODE=bare."; \
-		exit 1; \
-	fi
 
 check-port-conflict:
 	@if [[ "$(MODE)" == "docker" && "$(NGINX_HTTP_PORT)" == "80" ]]; then \
