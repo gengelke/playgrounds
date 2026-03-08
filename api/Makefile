@@ -12,28 +12,36 @@ PID_FILE       := .fastapi.pid
 API_URL        ?= http://127.0.0.1:8000
 DEPS_STAMP     := $(VENV)/.deps-installed
 DOCKER_COMPOSE ?= docker compose
+MODE           ?= bare
 
 .PHONY: all
-all: all-local
+all: workflow
+
+.PHONY: check-mode
+check-mode:
+	@case "$(MODE)" in \
+		bare|docker) ;; \
+		*) echo "Invalid MODE='$(MODE)'. Use MODE=bare or MODE=docker."; exit 2 ;; \
+	esac
 
 # ==========================================
 # Workflows
 # ==========================================
 
-.PHONY: all-local
-all-local:
+.PHONY: workflow
+workflow: deps
 	@set -e; \
-	$(MAKE) run-bg; \
-	trap '$(MAKE) stop' EXIT; \
-	$(MAKE) codegen; \
+	$(MAKE) up MODE=$(MODE); \
+	trap '$(MAKE) down MODE=$(MODE)' EXIT; \
+	$(MAKE) codegen MODE=$(MODE); \
 	$(MAKE) install; \
 	PYTHONPATH=. $(PYTEST) -v; \
 	$(PYTHON) example_client.py
 
-.PHONY: all-docker
-all-docker:
-	$(MAKE) run-docker
-	$(MAKE) codegen-docker
+.PHONY: up down codegen
+up: check-mode _up-$(MODE)
+down: check-mode _down-$(MODE)
+codegen: check-mode _codegen-$(MODE)
 
 # ==========================================
 # Setup
@@ -58,7 +66,7 @@ install: deps
 	$(PIP) install -e . --no-build-isolation
 
 # ==========================================
-# Run FastAPI (local)
+# Run FastAPI (bare)
 # ==========================================
 
 .PHONY: run
@@ -92,39 +100,37 @@ stop:
 	fi
 
 # ==========================================
-# Docker
+# Mode implementations
 # ==========================================
 
-.PHONY: run-docker
-run-docker:
+.PHONY: _up-bare _down-bare _codegen-bare
+_up-bare: run-bg
+
+_down-bare: stop
+
+_codegen-bare: deps
+	bash library-builder/generate-client.sh
+
+.PHONY: _up-docker _down-docker _codegen-docker
+_up-docker:
 	$(DOCKER_COMPOSE) up --build -d fastapi
 
-.PHONY: codegen-docker
-codegen-docker:
-	$(DOCKER_COMPOSE) run --rm codegen
-
-.PHONY: stop-docker
-stop-docker:
+_down-docker:
 	$(DOCKER_COMPOSE) down
 
-.PHONY: clean-docker
-clean-docker:
-	$(DOCKER_COMPOSE) down --rmi local --volumes --remove-orphans
+_codegen-docker:
+	$(DOCKER_COMPOSE) run --rm codegen
 
 # ==========================================
-# Codegen, test, example, CLI
+# Test, example, CLI
 # ==========================================
-
-.PHONY: codegen
-codegen: deps
-	bash library-builder/generate-client.sh
 
 .PHONY: test
 test: deps
 	@set -e; \
-	$(MAKE) run-bg; \
-	trap '$(MAKE) stop' EXIT; \
-	$(MAKE) codegen; \
+	$(MAKE) up MODE=$(MODE); \
+	trap '$(MAKE) down MODE=$(MODE)' EXIT; \
+	$(MAKE) codegen MODE=$(MODE); \
 	$(MAKE) install; \
 	PYTHONPATH=. $(PYTEST) -v
 
@@ -141,7 +147,8 @@ cli-list: deps
 # ==========================================
 
 .PHONY: clean
-clean: stop
+clean: check-mode
+	$(MAKE) down MODE=$(MODE)
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.un~" \) -delete
 	rm -rf generated_client dist *.egg-info .pytest_cache .mypy_cache htmlcov
@@ -159,24 +166,23 @@ distclean: clean
 .PHONY: help
 help:
 	@echo ""
-	@echo "Local:"
-	@echo "  make all-local      full workflow: server, codegen, test, example"
-	@echo "  make run            start FastAPI in foreground"
-	@echo "  make run-bg         start FastAPI in background"
-	@echo "  make stop           stop background FastAPI"
-	@echo "  make codegen        regenerate GraphQL client"
-	@echo "  make test           run pytest (manages server automatically)"
+	@echo "Mode-driven lifecycle (MODE=bare|docker, default bare):"
+	@echo "  make up MODE=bare|docker       start API"
+	@echo "  make codegen MODE=bare|docker  regenerate GraphQL client"
+	@echo "  make down MODE=bare|docker     stop API/services"
+	@echo "  make workflow MODE=bare|docker full workflow: up, codegen, test, example"
+	@echo "  make test MODE=bare|docker     run pytest (manages lifecycle automatically)"
+	@echo ""
+	@echo "Bare-mode helpers:"
+	@echo "  make run            start FastAPI in foreground (bare only)"
+	@echo "  make run-bg         start FastAPI in background (bare only)"
+	@echo "  make stop           stop background FastAPI (bare only)"
 	@echo "  make example        run example client"
 	@echo "  make cli-list       list employees via CLI"
 	@echo ""
-	@echo "Docker:"
-	@echo "  make all-docker     start Docker API + run codegen"
-	@echo "  make run-docker     start FastAPI with Docker"
-	@echo "  make codegen-docker regenerate GraphQL client in Docker"
-	@echo "  make stop-docker    stop Docker services"
-	@echo "  make clean-docker   remove containers/images/volumes"
+	@echo "Cleanup (mode aware):"
+	@echo "  make clean MODE=bare|docker"
+	@echo "  make distclean MODE=bare|docker"
 	@echo ""
-	@echo "Cleanup:"
-	@echo "  make clean          remove build artifacts"
-	@echo "  make distclean      remove artifacts + venv + sqlite db"
-	@echo ""
+	@echo "Legacy default:"
+	@echo "  make                same as make workflow MODE=bare"

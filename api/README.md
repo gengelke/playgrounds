@@ -12,56 +12,50 @@ You can run everything locally (venv + bash) or with Docker.
 ```bash
 # full local workflow: start API, codegen, install, test, run example
 make
+# same, explicit:
+make workflow MODE=bare
+# docker workflow:
+make workflow MODE=docker
 ```
 
 ```bash
-make clean
-make distclean
+make clean MODE=bare
+make distclean MODE=bare
 ```
 
-### Start API without Docker
+### Lifecycle commands (mode-driven)
+Use `MODE=bare` (default) or `MODE=docker`.
+
+```bash
+make up MODE=bare
+make down MODE=bare
+```
+
+```bash
+make up MODE=docker
+make down MODE=docker
+```
+
+Regenerate GraphQL client:
+```bash
+make codegen MODE=bare
+make codegen MODE=docker
+```
+
+Run tests against either mode:
+```bash
+make test MODE=bare
+make test MODE=docker
+```
+
+Bare-only helpers:
 ```bash
 make install
 make run
-```
-
-Background mode:
-```bash
 make run-bg
 make stop
-```
-
-To regenerate the GraphQL client from Bash:
-```bash
-make codegen
-```
-
-Run tests and the example client:
-```bash
-make test
 make example
 make cli-list
-```
-
-### Start API with Docker
-```bash
-make run-docker
-```
-
-Regenerate GraphQL client inside Docker:
-```bash
-make codegen-docker
-```
-
-Stop Docker services:
-```bash
-make stop-docker
-```
-
-### Optional one-shot workflows:
-```bash
-make all-local
-make all-docker
 ```
 
 ### Open
