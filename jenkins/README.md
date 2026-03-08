@@ -35,6 +35,8 @@ Both Jenkins instances automatically create and run a pipeline job from git:
 - `jenkins-prod` uses `http://host.docker.internal:3000/myuser/jenkins-example` branch `main` by default
 - `jenkins-dev` uses `http://host.docker.internal:3000/myuser/jenkins-example` branch `dev` by default
 - Both instances check out with Jenkins-managed credentials (`pipeline-git-prod` / `pipeline-git-dev`) when available
+- The default `jenkins-example` pipeline Jenkinsfile is branch-specific: `main` prints `hello prod world`, `dev` prints `hello dev world`
+- Gitea bootstrap also prepares `myuser/generate-library` with Jenkinsfiles that run `make workflow` for `https://github.com/gengelke/playground` and upload built Python artifacts to Nexus PyPI repo `pypi-public` via Vault credentials
 - The example pipeline is remote-triggerable with auth token `example-pipeline-auth-token` by default.
 
 To use your own git repo as Repo A:
@@ -134,6 +136,9 @@ curl -u admin:password "http://127.0.0.1:8081/job/example-pipeline/build?token=e
 - `JENKINS_REGULAR_USER` (default `user`)
 - `JENKINS_REGULAR_PASSWORD` (default `password`)
 - `JENKINS_REGULAR_API_TOKEN_NAME` (default `jenkins-api-token`)
+- `VAULT_ADDR` (auto-resolved; docker defaults to `http://host.docker.internal:8200`)
+- `VAULT_TOKEN` (auto-resolved from `../vault/.vault/credentials.env` when available)
+- `NEXUS_PYPI_REPO` (optional; default `pypi-public` in the generated Jenkinsfile)
 
 Example override:
 

@@ -10,6 +10,7 @@ This project supports two run modes through a single Makefile entrypoint:
 - waits until Nexus is healthy
 - ensures a managed admin account and regular account exist
 - configures anonymous access
+- ensures a hosted PyPI repository `pypi-public` exists
 - prints login credentials to the CLI
 
 ## Prerequisites
@@ -100,7 +101,8 @@ Key vars:
 - `NEXUS_ADMIN_PASSWORD` (default `password`)
 - `NEXUS_REGULAR_USER` (default `user`)
 - `NEXUS_REGULAR_PASSWORD` (default `password`)
-- `NEXUS_ANONYMOUS_ENABLED` (`true` or `false`, default `false`)
+- `NEXUS_PYPI_REPO` (default `pypi-public`)
+- `NEXUS_ANONYMOUS_ENABLED` (`true` or `false`, default `true`)
 - `NEXUS_AUTO_INIT` (`true` or `false`, default `true`)
 - `NEXUS_WAIT_TIMEOUT` (seconds, default `600`)
 - `NEXUS_WAIT_INTERVAL` (seconds, default `5`)

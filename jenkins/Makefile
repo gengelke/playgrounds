@@ -33,6 +33,8 @@ JENKINS_ADMIN_PASSWORD ?= password
 JENKINS_REGULAR_USER ?= user
 JENKINS_REGULAR_PASSWORD ?= password
 JENKINS_REGULAR_API_TOKEN_NAME ?= jenkins-api-token
+VAULT_TOKEN ?=
+NEXUS_PYPI_REPO ?= pypi-public
 
 PROD_HTTP_PORT ?= 8081
 DEV_HTTP_PORT ?= 8082
@@ -47,8 +49,9 @@ export PROD_BRANCH DEV_BRANCH PIPELINE_SCRIPT_PATH PIPELINE_JOB_NAME PIPELINE_AU
 export AGENT_COUNT AGENT_EXECUTORS PROD_HTTP_PORT DEV_HTTP_PORT
 export JENKINS_ADMIN_USER JENKINS_ADMIN_PASSWORD JENKINS_REGULAR_USER JENKINS_REGULAR_PASSWORD
 export JENKINS_REGULAR_API_TOKEN_NAME STATE_DIR
+export VAULT_ADDR VAULT_TOKEN NEXUS_PYPI_REPO
 
-.PHONY: help up down restart logs status clean \
+.PHONY: help up down restart logs status clean distclean \
 	docker-up docker-down docker-logs docker-status docker-clean \
 	bare-setup bare-up bare-down bare-logs bare-status bare-clean \
 	ensure-vault
@@ -75,6 +78,9 @@ help:
 	@echo "  DEV_PIPELINE_GIT_CREDENTIALS_ID=$(if $(DEV_PIPELINE_GIT_CREDENTIALS_ID),$(DEV_PIPELINE_GIT_CREDENTIALS_ID),<auto pipeline-git-dev when user/password available>)"
 	@echo "  DEV_PIPELINE_GIT_USERNAME=$(if $(DEV_PIPELINE_GIT_USERNAME),$(DEV_PIPELINE_GIT_USERNAME),<auto from gitea/runtime/shared/generated.env>)"
 	@echo "  DEV_PIPELINE_GIT_PASSWORD=<hidden>"
+	@echo "  VAULT_ADDR=$(if $(VAULT_ADDR),$(VAULT_ADDR),<auto from vault/.vault/credentials.env>)"
+	@echo "  VAULT_TOKEN=<hidden>"
+	@echo "  NEXUS_PYPI_REPO=$(NEXUS_PYPI_REPO)"
 	@echo "  PROD_BRANCH=$(PROD_BRANCH), DEV_BRANCH=$(DEV_BRANCH)"
 	@echo "  PIPELINE_SCRIPT_PATH=$(PIPELINE_SCRIPT_PATH), PIPELINE_JOB_NAME=$(PIPELINE_JOB_NAME)"
 	@echo "  PIPELINE_AUTH_TOKEN=$(PIPELINE_AUTH_TOKEN)"
@@ -146,6 +152,8 @@ docker-up: ensure-vault
 	dev_git_credentials_id="$$(resolve_instance_pipeline_git_credentials_id docker dev)"; \
 	dev_git_username="$$(resolve_instance_pipeline_git_username docker dev)"; \
 	dev_git_password="$$(resolve_instance_pipeline_git_password docker dev)"; \
+	vault_addr="$$(resolve_vault_addr docker)"; \
+	vault_token="$$(resolve_vault_token)"; \
 	mkdir -p $(STATE_DIR)/docker/jenkins-prod $(STATE_DIR)/docker/jenkins-dev; \
 	mkdir -p $(STATE_DIR)/docker/jenkins-prod/init.groovy.d $(STATE_DIR)/docker/jenkins-dev/init.groovy.d; \
 	mkdir -p $(STATE_DIR)/docker/jenkins-prod-agent-1 $(STATE_DIR)/docker/jenkins-prod-agent-2; \
@@ -161,6 +169,9 @@ docker-up: ensure-vault
 	DEV_PIPELINE_GIT_CREDENTIALS_ID="$$dev_git_credentials_id" \
 	DEV_PIPELINE_GIT_USERNAME="$$dev_git_username" \
 	DEV_PIPELINE_GIT_PASSWORD="$$dev_git_password" \
+	VAULT_ADDR="$$vault_addr" \
+	VAULT_TOKEN="$$vault_token" \
+	NEXUS_PYPI_REPO="$(NEXUS_PYPI_REPO)" \
 	JENKINS_ADMIN_USER="$$JENKINS_ADMIN_USER" \
 	JENKINS_ADMIN_PASSWORD="$$JENKINS_ADMIN_PASSWORD" \
 	$(COMPOSE_CMD) up -d --build; \
@@ -200,3 +211,6 @@ bare-clean: bare-down
 	@rm -rf $(STATE_DIR)/bare $(STATE_DIR)/cache
 
 clean: docker-clean bare-clean
+
+distclean: clean
+	@rm -rf $(STATE_DIR)

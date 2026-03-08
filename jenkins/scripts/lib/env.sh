@@ -41,6 +41,9 @@ JENKINS_ADMIN_USER="${JENKINS_ADMIN_USER:-admin}"
 JENKINS_ADMIN_PASSWORD="${JENKINS_ADMIN_PASSWORD:-password}"
 JENKINS_REGULAR_USER="${JENKINS_REGULAR_USER:-user}"
 JENKINS_REGULAR_PASSWORD="${JENKINS_REGULAR_PASSWORD:-password}"
+VAULT_ADDR="${VAULT_ADDR:-}"
+VAULT_TOKEN="${VAULT_TOKEN:-}"
+NEXUS_PYPI_REPO="${NEXUS_PYPI_REPO:-pypi-public}"
 
 CREDENTIALS_DIR="$(to_abs_path "${CREDENTIALS_DIR:-${STATE_DIR}/credentials}")"
 ADMIN_PASSWORD_FILE="$(to_abs_path "${ADMIN_PASSWORD_FILE:-${CREDENTIALS_DIR}/admin-password}")"
@@ -51,6 +54,7 @@ JENKINS_WAR_URL="${JENKINS_WAR_URL:-https://get.jenkins.io/war-stable/latest/jen
 JENKINS_WAR_PATH="${JENKINS_WAR_PATH:-${CACHE_DIR}/jenkins.war}"
 INIT_GROOVY_DIR="${INIT_GROOVY_DIR:-${ROOT_DIR}/jenkins/controller/init.groovy.d}"
 GITEA_GENERATED_ENV_FILE="${GITEA_GENERATED_ENV_FILE:-${ROOT_DIR}/../gitea/runtime/shared/generated.env}"
+VAULT_CREDS_FILE="${VAULT_CREDS_FILE:-${ROOT_DIR}/../vault/.vault/credentials.env}"
 
 JAVA_BIN="${JAVA_BIN:-java}"
 CURL_BIN="${CURL_BIN:-curl}"
@@ -231,6 +235,49 @@ read_env_file_value() {
 
   [[ -f "$file_path" ]] || return 1
   grep -E "^${key}=" "$file_path" | tail -n1 | cut -d= -f2-
+}
+
+normalize_localhost_for_mode() {
+  local mode="$1"
+  local value="$2"
+
+  if [[ "$mode" != "docker" ]]; then
+    printf '%s' "$value"
+    return
+  fi
+
+  printf '%s' "$value" | sed \
+    -e 's#http://localhost#http://host.docker.internal#g' \
+    -e 's#http://127.0.0.1#http://host.docker.internal#g' \
+    -e 's#https://localhost#https://host.docker.internal#g' \
+    -e 's#https://127.0.0.1#https://host.docker.internal#g'
+}
+
+resolve_vault_addr() {
+  local mode="$1"
+  local value="${VAULT_ADDR:-}"
+
+  if [[ -z "$value" ]]; then
+    value="$(read_env_file_value "$VAULT_CREDS_FILE" "VAULT_ADDR" 2>/dev/null || true)"
+  fi
+  if [[ -z "$value" ]]; then
+    value="http://127.0.0.1:8200"
+  fi
+
+  normalize_localhost_for_mode "$mode" "$value"
+}
+
+resolve_vault_token() {
+  local value="${VAULT_TOKEN:-${VAULT_ROOT_TOKEN:-}}"
+
+  if [[ -z "$value" ]]; then
+    value="$(read_env_file_value "$VAULT_CREDS_FILE" "VAULT_TOKEN" 2>/dev/null || true)"
+  fi
+  if [[ -z "$value" ]]; then
+    value="$(read_env_file_value "$VAULT_CREDS_FILE" "VAULT_ROOT_TOKEN" 2>/dev/null || true)"
+  fi
+
+  printf '%s' "$value"
 }
 
 resolve_instance_pipeline_git_username() {

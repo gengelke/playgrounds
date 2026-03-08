@@ -19,7 +19,7 @@ BOOTSTRAP_SCRIPT ?= ./scripts/bootstrap-vault.sh
 
 export VAULT_PORT
 
-.PHONY: help up down restart logs status clean creds bare-up bare-down docker-up docker-down
+.PHONY: help up down restart logs status clean distclean creds bare-up bare-down docker-up docker-down
 
 help:
 	@echo "Vault OSS local setup"
@@ -166,3 +166,5 @@ clean:
 	@$(MAKE) bare-down >/dev/null 2>&1 || true
 	@rm -rf ./.vault
 	@echo "Removed local Vault state at ./.vault"
+
+distclean: clean

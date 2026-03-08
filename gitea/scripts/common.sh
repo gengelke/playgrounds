@@ -314,14 +314,14 @@ ensure_example_workflow_repo() {
 
   local owner="${GITEA_USER:-myuser}"
   local password="${GITEA_USER_PASSWORD:-password}"
-  local repo_name="${GITEA_EXAMPLE_REPO:-actions-hello-world}"
-  local file_path=".gitea/workflows/hello-world.yml"
+  local repo_name="${GITEA_EXAMPLE_REPO:-actions-example}"
+  local file_path=".gitea/workflows/actions-example.yml"
   local file_url="${instance_url}/api/v1/repos/${owner}/${repo_name}/contents/${file_path}"
 
   local create_body
   create_body="$(mktemp)"
   local create_payload
-  create_payload="$(printf '{"name":"%s","auto_init":true}' "$repo_name")"
+  create_payload="$(printf '{"name":"%s","auto_init":true,"private":true}' "$repo_name")"
 
   local create_status
   create_status="$(curl -sS -o "$create_body" -w '%{http_code}' \
@@ -340,7 +340,7 @@ ensure_example_workflow_repo() {
 
   local workflow_content
   workflow_content="$(cat <<'EOF'
-name: Hello World
+name: actions-example
 
 on:
   push:
@@ -348,10 +348,10 @@ on:
 
 jobs:
   hello:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64
     steps:
       - name: Print hello world
-        run: echo "Hello, world!"
+        run: echo "hello world"
 EOF
 )"
   local workflow_b64
@@ -404,13 +404,13 @@ EOF
   log "Ensured example workflow in '${owner}/${repo_name}:${file_path}'"
 }
 
-ensure_jenkins_example_repo() {
-  local auto_add="${GITEA_AUTO_ADD_JENKINS_EXAMPLE:-true}"
-  auto_add="$(printf '%s' "$auto_add" | tr '[:upper:]' '[:lower:]')"
-  case "$auto_add" in
+remove_example_workflow_repo() {
+  local remove_repo="${GITEA_REMOVE_EXAMPLE_WORKFLOW_REPO:-false}"
+  remove_repo="$(printf '%s' "$remove_repo" | tr '[:upper:]' '[:lower:]')"
+  case "$remove_repo" in
     1|true|yes|on) ;;
     *)
-      log "Skipping jenkins example setup (GITEA_AUTO_ADD_JENKINS_EXAMPLE=${GITEA_AUTO_ADD_JENKINS_EXAMPLE:-false})"
+      log "Keeping example workflow repo (GITEA_REMOVE_EXAMPLE_WORKFLOW_REPO=${GITEA_REMOVE_EXAMPLE_WORKFLOW_REPO:-false})"
       return 0
       ;;
   esac
@@ -421,8 +421,116 @@ ensure_jenkins_example_repo() {
 
   local owner="${GITEA_USER:-myuser}"
   local password="${GITEA_USER_PASSWORD:-password}"
-  local repo_name="${GITEA_JENKINS_EXAMPLE_REPO:-jenkins-example}"
+  local repo_name="${GITEA_EXAMPLE_REPO:-actions-example}"
+
+  local delete_body
+  delete_body="$(mktemp)"
+  local delete_status
+  delete_status="$(curl -sS -o "$delete_body" -w '%{http_code}' \
+    --user "${owner}:${password}" \
+    -X DELETE \
+    "${instance_url}/api/v1/repos/${owner}/${repo_name}" || true)"
+
+  if [[ "$delete_status" == "204" ]]; then
+    log "Removed legacy example workflow repo '${owner}/${repo_name}'"
+  elif [[ "$delete_status" == "404" ]]; then
+    log "Legacy example workflow repo '${owner}/${repo_name}' is already absent"
+  else
+    cat "$delete_body" >&2 || true
+    rm -f "$delete_body"
+    die "Failed to remove legacy example workflow repo '${owner}/${repo_name}' (HTTP ${delete_status})"
+  fi
+  rm -f "$delete_body"
+}
+
+rename_legacy_generate_api_library_repo() {
+  local gitea_http_port="${GITEA_HTTP_PORT:-3000}"
+  local instance_url="${GITEA_ROOT_URL:-http://localhost:${gitea_http_port}/}"
+  instance_url="${instance_url%/}"
+
+  local owner="${GITEA_USER:-myuser}"
+  local password="${GITEA_USER_PASSWORD:-password}"
+  local old_repo="generate-api-library"
+  local new_repo="${GITEA_GENERATE_LIBRARY_REPO:-generate-library}"
+
+  if [[ "$old_repo" == "$new_repo" ]]; then
+    return 0
+  fi
+
+  local old_status
+  old_status="$(curl -sS -o /tmp/gitea-repo-old.out -w '%{http_code}' \
+    --user "${owner}:${password}" \
+    "${instance_url}/api/v1/repos/${owner}/${old_repo}" || true)"
+  if [[ "$old_status" == "404" ]]; then
+    rm -f /tmp/gitea-repo-old.out
+    return 0
+  fi
+  if [[ "$old_status" != "200" ]]; then
+    cat /tmp/gitea-repo-old.out >&2 || true
+    rm -f /tmp/gitea-repo-old.out
+    die "Failed to query legacy repo '${owner}/${old_repo}' (HTTP ${old_status})"
+  fi
+  rm -f /tmp/gitea-repo-old.out
+
+  local new_status
+  new_status="$(curl -sS -o /tmp/gitea-repo-new.out -w '%{http_code}' \
+    --user "${owner}:${password}" \
+    "${instance_url}/api/v1/repos/${owner}/${new_repo}" || true)"
+  if [[ "$new_status" == "200" ]]; then
+    rm -f /tmp/gitea-repo-new.out
+    local delete_status
+    delete_status="$(curl -sS -o /tmp/gitea-repo-del.out -w '%{http_code}' \
+      --user "${owner}:${password}" \
+      -X DELETE \
+      "${instance_url}/api/v1/repos/${owner}/${old_repo}" || true)"
+    if [[ "$delete_status" != "204" && "$delete_status" != "404" ]]; then
+      cat /tmp/gitea-repo-del.out >&2 || true
+      rm -f /tmp/gitea-repo-del.out
+      die "Failed to remove legacy repo '${owner}/${old_repo}' (HTTP ${delete_status})"
+    fi
+    rm -f /tmp/gitea-repo-del.out
+    log "Removed legacy repo '${owner}/${old_repo}' because '${owner}/${new_repo}' already exists"
+    return 0
+  fi
+  if [[ "$new_status" != "404" ]]; then
+    cat /tmp/gitea-repo-new.out >&2 || true
+    rm -f /tmp/gitea-repo-new.out
+    die "Failed to query target repo '${owner}/${new_repo}' (HTTP ${new_status})"
+  fi
+  rm -f /tmp/gitea-repo-new.out
+
+  local rename_payload
+  rename_payload="$(printf '{"name":"%s"}' "$new_repo")"
+  local rename_status
+  rename_status="$(curl -sS -o /tmp/gitea-repo-rename.out -w '%{http_code}' \
+    --user "${owner}:${password}" \
+    -H 'Content-Type: application/json' \
+    -X PATCH \
+    --data "$rename_payload" \
+    "${instance_url}/api/v1/repos/${owner}/${old_repo}" || true)"
+  if [[ "$rename_status" != "200" ]]; then
+    cat /tmp/gitea-repo-rename.out >&2 || true
+    rm -f /tmp/gitea-repo-rename.out
+    die "Failed to rename repo '${owner}/${old_repo}' -> '${new_repo}' (HTTP ${rename_status})"
+  fi
+  rm -f /tmp/gitea-repo-rename.out
+
+  log "Renamed legacy repo '${owner}/${old_repo}' to '${new_repo}'"
+}
+
+ensure_repo_with_branch_jenkinsfiles() {
+  local repo_name="$1"
+  local prod_jenkinsfile="$2"
+  local dev_jenkinsfile="$3"
+  local repo_label="$4"
   local file_path="Jenkinsfile"
+
+  local gitea_http_port="${GITEA_HTTP_PORT:-3000}"
+  local instance_url="${GITEA_ROOT_URL:-http://localhost:${gitea_http_port}/}"
+  instance_url="${instance_url%/}"
+
+  local owner="${GITEA_USER:-myuser}"
+  local password="${GITEA_USER_PASSWORD:-password}"
 
   local create_body
   create_body="$(mktemp)"
@@ -440,7 +548,7 @@ ensure_jenkins_example_repo() {
   if [[ "$create_status" != "201" && "$create_status" != "409" ]]; then
     cat "$create_body" >&2 || true
     rm -f "$create_body"
-    die "Failed to create jenkins example repository '${owner}/${repo_name}' (HTTP ${create_status})"
+    die "Failed to create ${repo_label} repository '${owner}/${repo_name}' (HTTP ${create_status})"
   fi
   rm -f "$create_body"
 
@@ -462,35 +570,6 @@ ensure_jenkins_example_repo() {
   if [[ -z "$default_branch" ]]; then
     default_branch="main"
   fi
-
-  local prod_jenkinsfile
-  prod_jenkinsfile="$(cat <<'EOF'
-pipeline {
-  agent any
-  stages {
-    stage('Hello') {
-      steps {
-        echo 'hello prod world'
-      }
-    }
-  }
-}
-EOF
-)"
-  local dev_jenkinsfile
-  dev_jenkinsfile="$(cat <<'EOF'
-pipeline {
-  agent any
-  stages {
-    stage('Hello') {
-      steps {
-        echo 'hello dev world'
-      }
-    }
-  }
-}
-EOF
-)"
 
   local file_url="${instance_url}/api/v1/repos/${owner}/${repo_name}/contents/${file_path}"
 
@@ -520,10 +599,10 @@ EOF
     local payload
     local write_method
     if [[ -n "$existing_sha" ]]; then
-      payload="$(printf '{"content":"%s","message":"chore: set jenkins example for %s","branch":"%s","sha":"%s"}' "$content_b64" "$target_branch" "$target_branch" "$existing_sha")"
+      payload="$(printf '{"content":"%s","message":"chore: set %s Jenkinsfile for %s","branch":"%s","sha":"%s"}' "$content_b64" "$repo_name" "$target_branch" "$target_branch" "$existing_sha")"
       write_method="PUT"
     else
-      payload="$(printf '{"content":"%s","message":"chore: set jenkins example for %s","branch":"%s"}' "$content_b64" "$target_branch" "$target_branch")"
+      payload="$(printf '{"content":"%s","message":"chore: set %s Jenkinsfile for %s","branch":"%s"}' "$content_b64" "$repo_name" "$target_branch" "$target_branch")"
       write_method="POST"
     fi
 
@@ -579,5 +658,51 @@ EOF
   rm -f "$branch_body"
 
   put_repo_file "dev" "$dev_jenkinsfile"
-  log "Ensured Jenkins example repo '${owner}/${repo_name}' with branches '${default_branch}' and 'dev'"
+  log "Ensured ${repo_label} repo '${owner}/${repo_name}' with branches '${default_branch}' and 'dev'"
+}
+
+ensure_jenkins_example_repo() {
+  local auto_add="${GITEA_AUTO_ADD_JENKINS_EXAMPLE:-true}"
+  auto_add="$(printf '%s' "$auto_add" | tr '[:upper:]' '[:lower:]')"
+  case "$auto_add" in
+    1|true|yes|on) ;;
+    *)
+      log "Skipping jenkins example setup (GITEA_AUTO_ADD_JENKINS_EXAMPLE=${GITEA_AUTO_ADD_JENKINS_EXAMPLE:-false})"
+      return 0
+      ;;
+  esac
+
+  local template
+  template="$(cat "${ROOT_DIR}/templates/jenkins-example.Jenkinsfile")"
+  local prod_jenkinsfile="${template//__HELLO_MESSAGE__/hello prod world}"
+  local dev_jenkinsfile="${template//__HELLO_MESSAGE__/hello dev world}"
+
+  ensure_repo_with_branch_jenkinsfiles \
+    "${GITEA_JENKINS_EXAMPLE_REPO:-jenkins-example}" \
+    "$prod_jenkinsfile" \
+    "$dev_jenkinsfile" \
+    "Jenkins example"
+}
+
+ensure_generate_library_repo() {
+  local auto_add="${GITEA_AUTO_ADD_GENERATE_LIBRARY:-true}"
+  auto_add="$(printf '%s' "$auto_add" | tr '[:upper:]' '[:lower:]')"
+  case "$auto_add" in
+    1|true|yes|on) ;;
+    *)
+      log "Skipping generate-library setup (GITEA_AUTO_ADD_GENERATE_LIBRARY=${GITEA_AUTO_ADD_GENERATE_LIBRARY:-false})"
+      return 0
+      ;;
+  esac
+
+  rename_legacy_generate_api_library_repo
+
+  local jenkinsfile
+  jenkinsfile="$(cat "${ROOT_DIR}/templates/generate-library.Jenkinsfile")"
+
+  ensure_repo_with_branch_jenkinsfiles \
+    "${GITEA_GENERATE_LIBRARY_REPO:-generate-library}" \
+    "$jenkinsfile" \
+    "$jenkinsfile" \
+    "generate-library"
 }

@@ -18,7 +18,7 @@ prepare_bootstrap_env
 "${ROOT_DIR}/scripts/render-gitea-config.sh" docker "$gitea_config"
 
 log "Starting Gitea (docker mode)"
-docker compose -f "$compose_file" up -d gitea
+docker compose -f "$compose_file" up -d --force-recreate gitea
 
 gitea_http_port="${GITEA_HTTP_PORT:-3000}"
 wait_http "http://127.0.0.1:${gitea_http_port}/api/healthz" 180
@@ -63,10 +63,21 @@ docker compose -f "$compose_file" exec -T --user git gitea \
   --password "$user_password" \
   --must-change-password=false
 
+runner_token="$(docker compose -f "$compose_file" exec -T --user git gitea \
+  gitea --config /data/gitea/conf/app.ini actions generate-runner-token | tr -d '\r\n')"
+[[ -n "$runner_token" ]] || die "Failed to generate runner registration token from Gitea"
+GITEA_RUNNER_TOKEN="$runner_token"
+export GITEA_RUNNER_TOKEN
+envfile_set "${ROOT_DIR}/runtime/shared/generated.env" "GITEA_RUNNER_TOKEN" "$GITEA_RUNNER_TOKEN"
+sync_credentials_to_vault
+log "Generated runner registration token from Gitea."
+
+remove_example_workflow_repo
 ensure_example_workflow_repo
 ensure_jenkins_example_repo
+ensure_generate_library_repo
 
 log "Starting runner1 and runner2 (docker mode)"
-docker compose -f "$compose_file" up -d runner1 runner2
+docker compose -f "$compose_file" up -d --force-recreate runner1 runner2
 
 log "Docker mode ready at http://localhost:${gitea_http_port}"

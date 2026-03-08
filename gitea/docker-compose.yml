@@ -20,7 +20,7 @@ services:
       GITEA_INSTANCE_URL: http://gitea:3000
       GITEA_RUNNER_REGISTRATION_TOKEN: "${GITEA_RUNNER_TOKEN:-local-runner-token-change-me}"
       GITEA_RUNNER_NAME: "${RUNNER1_NAME:-agent-runner-1}"
-      GITEA_RUNNER_LABELS: "${RUNNER_LABELS_DOCKER:-linux-amd64:docker://node:20-bookworm}"
+      GITEA_RUNNER_LABELS: "${RUNNER_LABELS_DOCKER:-linux-amd64:docker://node:20-bookworm,ubuntu-latest:docker://node:20-bookworm}"
     volumes:
       - ./runtime/docker/runner1:/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -34,7 +34,7 @@ services:
       GITEA_INSTANCE_URL: http://gitea:3000
       GITEA_RUNNER_REGISTRATION_TOKEN: "${GITEA_RUNNER_TOKEN:-local-runner-token-change-me}"
       GITEA_RUNNER_NAME: "${RUNNER2_NAME:-agent-runner-2}"
-      GITEA_RUNNER_LABELS: "${RUNNER_LABELS_DOCKER:-linux-amd64:docker://node:20-bookworm}"
+      GITEA_RUNNER_LABELS: "${RUNNER_LABELS_DOCKER:-linux-amd64:docker://node:20-bookworm,ubuntu-latest:docker://node:20-bookworm}"
     volumes:
       - ./runtime/docker/runner2:/data
       - /var/run/docker.sock:/var/run/docker.sock

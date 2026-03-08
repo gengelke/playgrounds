@@ -12,6 +12,11 @@ DEV_PIPELINE_REPO_URL="$(resolve_instance_pipeline_repo_url bare dev)"
 PROD_PIPELINE_GIT_CREDENTIALS_ID="$(resolve_instance_pipeline_git_credentials_id bare prod)"
 DEV_PIPELINE_GIT_CREDENTIALS_ID="$(resolve_instance_pipeline_git_credentials_id bare dev)"
 print_pipeline_configuration "$PROD_PIPELINE_REPO_URL" "$DEV_PIPELINE_REPO_URL" "$PROD_PIPELINE_GIT_CREDENTIALS_ID" "$DEV_PIPELINE_GIT_CREDENTIALS_ID"
+VAULT_ADDR_RESOLVED="$(resolve_vault_addr bare)"
+VAULT_TOKEN_RESOLVED="$(resolve_vault_token)"
+export VAULT_ADDR="$VAULT_ADDR_RESOLVED"
+export VAULT_TOKEN="$VAULT_TOKEN_RESOLVED"
+export NEXUS_PYPI_REPO="${NEXUS_PYPI_REPO:-pypi-public}"
 
 CURL_AUTH_ARGS=()
 if [[ -n "${JENKINS_ADMIN_USER:-}" && -n "${JENKINS_ADMIN_PASSWORD:-}" ]]; then
@@ -60,6 +65,9 @@ start_controller() {
     export JENKINS_ADMIN_PASSWORD="$JENKINS_ADMIN_PASSWORD"
     export JENKINS_REGULAR_USER="$JENKINS_REGULAR_USER"
     export JENKINS_REGULAR_PASSWORD="$JENKINS_REGULAR_PASSWORD"
+    export VAULT_ADDR="$VAULT_ADDR"
+    export VAULT_TOKEN="$VAULT_TOKEN"
+    export NEXUS_PYPI_REPO="$NEXUS_PYPI_REPO"
 
     nohup "$JAVA_BIN" \
       -Djenkins.install.runSetupWizard=false \

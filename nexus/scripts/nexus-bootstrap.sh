@@ -11,7 +11,8 @@ NEXUS_ADMIN_USER="${NEXUS_ADMIN_USER:-admin}"
 NEXUS_ADMIN_PASSWORD="${NEXUS_ADMIN_PASSWORD:-password}"
 NEXUS_REGULAR_USER="${NEXUS_REGULAR_USER:-user}"
 NEXUS_REGULAR_PASSWORD="${NEXUS_REGULAR_PASSWORD:-password}"
-NEXUS_ANONYMOUS_ENABLED="${NEXUS_ANONYMOUS_ENABLED:-false}"
+NEXUS_ANONYMOUS_ENABLED="${NEXUS_ANONYMOUS_ENABLED:-true}"
+NEXUS_PYPI_REPO="${NEXUS_PYPI_REPO:-pypi-public}"
 NEXUS_WAIT_TIMEOUT="${NEXUS_WAIT_TIMEOUT:-600}"
 NEXUS_WAIT_INTERVAL="${NEXUS_WAIT_INTERVAL:-5}"
 NEXUS_BOOTSTRAP_PASSWORD_FILE="${NEXUS_BOOTSTRAP_PASSWORD_FILE:-$NEXUS_DATA_DIR/.nexus-admin-password}"
@@ -280,6 +281,45 @@ configure_anonymous_access() {
   fi
 }
 
+pypi_repo_exists() {
+  local repos
+  repos="$(curl -sS \
+    --connect-timeout "$NEXUS_CONNECT_TIMEOUT" \
+    --max-time "$NEXUS_CURL_MAX_TIME" \
+    -u "${NEXUS_BOOTSTRAP_USER}:${CURRENT_BOOTSTRAP_PASSWORD}" \
+    "${NEXUS_URL}/service/rest/v1/repositories" || true)"
+  grep -q "\"name\"[[:space:]]*:[[:space:]]*\"${NEXUS_PYPI_REPO}\"" <<<"$repos"
+}
+
+ensure_pypi_hosted_repo() {
+  if pypi_repo_exists; then
+    log "PyPI repository '${NEXUS_PYPI_REPO}' already exists."
+    return 0
+  fi
+
+  local payload body status
+  body="$(mktemp)"
+  payload="$(printf '{"name":"%s","online":true,"storage":{"blobStoreName":"default","strictContentTypeValidation":true,"writePolicy":"ALLOW"}}' "$NEXUS_PYPI_REPO")"
+  status="$(curl -sS -o "$body" -w '%{http_code}' \
+    --connect-timeout "$NEXUS_CONNECT_TIMEOUT" \
+    --max-time "$NEXUS_CURL_MAX_TIME" \
+    -u "${NEXUS_BOOTSTRAP_USER}:${CURRENT_BOOTSTRAP_PASSWORD}" \
+    -H "Content-Type: application/json" \
+    -X POST \
+    --data "$payload" \
+    "${NEXUS_URL}/service/rest/v1/repositories/pypi/hosted" || true)"
+
+  if [[ "$status" != "201" && "$status" != "204" && "$status" != "400" && "$status" != "409" ]]; then
+    cat "$body" >&2 || true
+    rm -f "$body"
+    echo "Failed to ensure PyPI hosted repository '${NEXUS_PYPI_REPO}'." >&2
+    exit 1
+  fi
+
+  rm -f "$body"
+  log "Ensured PyPI repository '${NEXUS_PYPI_REPO}'."
+}
+
 persist_bootstrap_password() {
   mkdir -p "$(dirname "$NEXUS_BOOTSTRAP_PASSWORD_FILE")"
   printf '%s\n' "$CURRENT_BOOTSTRAP_PASSWORD" >"$NEXUS_BOOTSTRAP_PASSWORD_FILE"
@@ -301,6 +341,7 @@ sync_credentials_to_vault() {
     "regular_password" "$NEXUS_REGULAR_PASSWORD" \
     "bootstrap_user" "$NEXUS_BOOTSTRAP_USER" \
     "bootstrap_password" "$CURRENT_BOOTSTRAP_PASSWORD" \
+    "pypi_repo" "$NEXUS_PYPI_REPO" \
     "anonymous_enabled" "$(normalize_bool "$NEXUS_ANONYMOUS_ENABLED")"; then
     log "Warning: failed to sync Nexus credentials to Vault."
   fi
@@ -314,6 +355,7 @@ print_credentials() {
   echo "Admin Password: ${NEXUS_ADMIN_PASSWORD}"
   echo "User Username: ${NEXUS_REGULAR_USER}"
   echo "User Password: ${NEXUS_REGULAR_PASSWORD}"
+  echo "PyPI Repository: ${NEXUS_PYPI_REPO}"
   echo "Anonymous access: $(normalize_bool "$NEXUS_ANONYMOUS_ENABLED")"
 }
 
@@ -331,6 +373,7 @@ wait_for_bootstrap_password
 configure_bootstrap_password
 ensure_required_users
 configure_anonymous_access
+ensure_pypi_hosted_repo
 persist_bootstrap_password
 sync_credentials_to_vault
 print_credentials

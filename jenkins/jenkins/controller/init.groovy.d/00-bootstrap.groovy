@@ -24,6 +24,20 @@ def pipelineAuthToken = env.getOrDefault("PIPELINE_AUTH_TOKEN", "example-pipelin
 def pipelineGitCredentialsId = env.getOrDefault("PIPELINE_GIT_CREDENTIALS_ID", "").trim()
 def pipelineGitUsername = env.getOrDefault("PIPELINE_GIT_USERNAME", "").trim()
 def pipelineGitPassword = env.getOrDefault("PIPELINE_GIT_PASSWORD", "")
+def deriveGenerateLibraryRepoUrl = { String repoUrl ->
+  if (!repoUrl?.trim()) {
+    return repoUrl
+  }
+  return repoUrl.replace("/jenkins-example", "/generate-library")
+}
+def generateLibraryPipelineRepoUrl = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_REPO_URL", deriveGenerateLibraryRepoUrl(pipelineRepoUrl))
+def generateLibraryPipelineBranch = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_BRANCH", pipelineBranch)
+def generateLibraryPipelineScriptPath = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_SCRIPT_PATH", pipelineScriptPath)
+def generateLibraryPipelineJobName = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_JOB_NAME", "generate-library")
+def generateLibraryPipelineAuthToken = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_AUTH_TOKEN", "")
+def generateLibraryPipelineGitCredentialsId = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_GIT_CREDENTIALS_ID", pipelineGitCredentialsId).trim()
+def generateLibraryPipelineGitUsername = env.getOrDefault("GENERATE_LIBRARY_PIPELINE_GIT_USERNAME", pipelineGitUsername).trim()
+def generateLibraryPipelineGitPassword = env.containsKey("GENERATE_LIBRARY_PIPELINE_GIT_PASSWORD") ? env.get("GENERATE_LIBRARY_PIPELINE_GIT_PASSWORD") : pipelineGitPassword
 def agentCount = (env.getOrDefault("AGENT_COUNT", "2") as Integer)
 def agentExecutors = (env.getOrDefault("AGENT_EXECUTORS", "1") as Integer)
 def agentRemoteFs = env.getOrDefault("AGENT_REMOTE_FS", "/home/jenkins/agent")
@@ -137,19 +151,15 @@ def usernamePasswordCredentialsImplClass = optionalClass("com.cloudbees.plugins.
 
 if (workflowJobClass && cpsScmFlowDefinitionClass && gitScmClass && branchSpecClass && userRemoteConfigClass) {
   try {
-    def pipelineJob = jenkins.getItemByFullName(pipelineJobName, workflowJobClass)
-    if (pipelineJob == null) {
-      pipelineJob = jenkins.createProject(workflowJobClass, pipelineJobName)
-      println("[bootstrap] created pipeline job ${pipelineJobName}")
-    }
+    def ensureManagedGitCredentials = { String credentialId, String username, String password, String credentialLabel ->
+      if (!credentialId?.trim()) {
+        return
+      }
+      if (!username?.trim() || !password?.trim()) {
+        println("[bootstrap] using existing git credentials id ${credentialId}")
+        return
+      }
 
-    def effectiveGitCredentialsId = pipelineGitCredentialsId
-    if (!effectiveGitCredentialsId && pipelineGitUsername && pipelineGitPassword) {
-      effectiveGitCredentialsId = "${instanceName}-pipeline-git"
-      println("[bootstrap] using generated git credentials id ${effectiveGitCredentialsId}")
-    }
-
-    if (effectiveGitCredentialsId && pipelineGitUsername && pipelineGitPassword) {
       if (systemCredentialsProviderClass && domainClass && credentialsScopeClass && usernamePasswordCredentialsImplClass) {
         try {
           def provider = systemCredentialsProviderClass.getInstance()
@@ -159,7 +169,7 @@ if (workflowJobClass && cpsScmFlowDefinitionClass && gitScmClass && branchSpecCl
           def existing = provider.getCredentials()
             .find { credential ->
               try {
-                return credential.getId() == effectiveGitCredentialsId
+                return credential.getId() == credentialId
               } catch (Exception ignored) {
                 return false
               }
@@ -171,73 +181,127 @@ if (workflowJobClass && cpsScmFlowDefinitionClass && gitScmClass && branchSpecCl
 
           def managedGitCredential = usernamePasswordCredentialsImplClass.newInstance(
             credentialsScopeClass.GLOBAL,
-            effectiveGitCredentialsId,
-            "${managedDescription} (${instanceName} pipeline git)",
-            pipelineGitUsername,
-            pipelineGitPassword
+            credentialId,
+            "${managedDescription} (${instanceName} ${credentialLabel})",
+            username,
+            password
           )
           store.addCredentials(globalDomain, managedGitCredential)
           provider.save()
-          println("[bootstrap] ensured git credentials ${effectiveGitCredentialsId}")
+          println("[bootstrap] ensured git credentials ${credentialId}")
         } catch (Exception credentialsError) {
           println("[bootstrap] failed to manage git credentials: ${credentialsError.class.simpleName}: ${credentialsError.message}")
         }
       } else {
         println("[bootstrap] credentials plugin classes unavailable; cannot manage git credentials")
       }
-    } else if (effectiveGitCredentialsId) {
-      println("[bootstrap] using existing git credentials id ${effectiveGitCredentialsId}")
     }
 
-    def scmRepoUrl = pipelineRepoUrl
-    if (effectiveGitCredentialsId?.trim()) {
-      scmRepoUrl = stripUserInfo(scmRepoUrl)
-    }
-    def displayRepoUrl = maskUserInfo(scmRepoUrl)
+    def configurePipelineJob = { Map config ->
+      def jobName = config.jobName
+      def repoUrl = config.repoUrl
+      def branch = config.branch
+      def scriptPath = config.scriptPath
+      def authToken = config.authToken
+      def gitCredentialsId = config.gitCredentialsId
+      def gitUsername = config.gitUsername
+      def gitPassword = config.gitPassword
 
-    def scm = gitScmClass.newInstance(
-      [userRemoteConfigClass.newInstance(scmRepoUrl, null, null, effectiveGitCredentialsId ?: null)],
-      [branchSpecClass.newInstance("*/${pipelineBranch}")],
-      false,
-      [],
-      null,
-      null,
-      []
-    )
+      if (!jobName?.trim()) {
+        println("[bootstrap] skipped pipeline configuration due to empty job name")
+        return
+      }
+      if (!repoUrl?.trim()) {
+        println("[bootstrap] skipped pipeline '${jobName}' because repository URL is empty")
+        return
+      }
 
-    def definition = cpsScmFlowDefinitionClass.newInstance(scm, pipelineScriptPath)
-    definition.setLightweight(true)
+      def pipelineJob = jenkins.getItemByFullName(jobName, workflowJobClass)
+      if (pipelineJob == null) {
+        pipelineJob = jenkins.createProject(workflowJobClass, jobName)
+        println("[bootstrap] created pipeline job ${jobName}")
+      }
 
-    pipelineJob.setDefinition(definition)
-    pipelineJob.setDescription(
-      """${managedDescription}
+      def effectiveGitCredentialsId = gitCredentialsId?.trim()
+      if (!effectiveGitCredentialsId && gitUsername?.trim() && gitPassword?.trim()) {
+        effectiveGitCredentialsId = "${instanceName}-${jobName}-git".replaceAll("[^A-Za-z0-9._-]", "-")
+        println("[bootstrap] using generated git credentials id ${effectiveGitCredentialsId}")
+      }
+
+      ensureManagedGitCredentials(effectiveGitCredentialsId, gitUsername, gitPassword, "${jobName} pipeline git")
+
+      def scmRepoUrl = repoUrl
+      if (effectiveGitCredentialsId?.trim()) {
+        scmRepoUrl = stripUserInfo(scmRepoUrl)
+      }
+      def displayRepoUrl = maskUserInfo(scmRepoUrl)
+
+      def scm = gitScmClass.newInstance(
+        [userRemoteConfigClass.newInstance(scmRepoUrl, null, null, effectiveGitCredentialsId ?: null)],
+        [branchSpecClass.newInstance("*/${branch}")],
+        false,
+        [],
+        null,
+        null,
+        []
+      )
+
+      def definition = cpsScmFlowDefinitionClass.newInstance(scm, scriptPath)
+      definition.setLightweight(true)
+
+      pipelineJob.setDefinition(definition)
+      pipelineJob.setDescription(
+        """${managedDescription}
 Pipeline repository: ${displayRepoUrl}
-Pipeline branch: ${pipelineBranch}
-Pipeline script path: ${pipelineScriptPath}
+Pipeline branch: ${branch}
+Pipeline script path: ${scriptPath}
 """.stripIndent()
-    )
+      )
 
-    if (pipelineAuthToken?.trim()) {
-      try {
-        def configuredToken = pipelineJob.getAuthToken()?.getToken()
-        if (configuredToken != pipelineAuthToken) {
-          def authTokenField = pipelineJob.getClass().getDeclaredField("authToken")
-          authTokenField.setAccessible(true)
-          authTokenField.set(pipelineJob, new BuildAuthorizationToken(pipelineAuthToken))
-          println("[bootstrap] configured remote trigger token for ${pipelineJobName}")
+      if (authToken?.trim()) {
+        try {
+          def configuredToken = pipelineJob.getAuthToken()?.getToken()
+          if (configuredToken != authToken) {
+            def authTokenField = pipelineJob.getClass().getDeclaredField("authToken")
+            authTokenField.setAccessible(true)
+            authTokenField.set(pipelineJob, new BuildAuthorizationToken(authToken))
+            println("[bootstrap] configured remote trigger token for ${jobName}")
+          }
+        } catch (Exception tokenError) {
+          println("[bootstrap] failed to set remote trigger token: ${tokenError.class.simpleName}: ${tokenError.message}")
         }
-      } catch (Exception tokenError) {
-        println("[bootstrap] failed to set remote trigger token: ${tokenError.class.simpleName}: ${tokenError.message}")
+      }
+
+      pipelineJob.save()
+
+      def lastBuild = pipelineJob.getLastBuild()
+      if (!pipelineJob.isBuilding() && (lastBuild == null || lastBuild.getResult() != hudson.model.Result.SUCCESS)) {
+        pipelineJob.scheduleBuild2(0)
+        println("[bootstrap] triggered initial build for ${jobName}")
       }
     }
 
-    pipelineJob.save()
+    configurePipelineJob([
+      jobName: pipelineJobName,
+      repoUrl: pipelineRepoUrl,
+      branch: pipelineBranch,
+      scriptPath: pipelineScriptPath,
+      authToken: pipelineAuthToken,
+      gitCredentialsId: pipelineGitCredentialsId,
+      gitUsername: pipelineGitUsername,
+      gitPassword: pipelineGitPassword
+    ])
 
-    def lastBuild = pipelineJob.getLastBuild()
-    if (!pipelineJob.isBuilding() && (lastBuild == null || lastBuild.getResult() != hudson.model.Result.SUCCESS)) {
-      pipelineJob.scheduleBuild2(0)
-      println("[bootstrap] triggered initial build for ${pipelineJobName}")
-    }
+    configurePipelineJob([
+      jobName: generateLibraryPipelineJobName,
+      repoUrl: generateLibraryPipelineRepoUrl,
+      branch: generateLibraryPipelineBranch,
+      scriptPath: generateLibraryPipelineScriptPath,
+      authToken: generateLibraryPipelineAuthToken,
+      gitCredentialsId: generateLibraryPipelineGitCredentialsId,
+      gitUsername: generateLibraryPipelineGitUsername,
+      gitPassword: generateLibraryPipelineGitPassword
+    ])
   } catch (Exception e) {
     println("[bootstrap] pipeline job configuration skipped due to error: ${e.class.simpleName}: ${e.message}")
   }

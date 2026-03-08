@@ -20,7 +20,8 @@ NEXUS_ADMIN_USER ?= admin
 NEXUS_ADMIN_PASSWORD ?= password
 NEXUS_REGULAR_USER ?= user
 NEXUS_REGULAR_PASSWORD ?= password
-NEXUS_ANONYMOUS_ENABLED ?= false
+NEXUS_PYPI_REPO ?= pypi-public
+NEXUS_ANONYMOUS_ENABLED ?= true
 NEXUS_AUTO_INIT ?= true
 NEXUS_WAIT_TIMEOUT ?= 600
 NEXUS_WAIT_INTERVAL ?= 5
@@ -32,7 +33,7 @@ DOCKER_DATA_DIR ?= $(CURDIR)/data/docker-data
 DOCKER_COMPOSE ?= docker compose
 NEXUS_HTTP_PORT ?= 8083
 
-.PHONY: up down restart logs status clean help ensure-vault
+.PHONY: up down restart logs status clean distclean help ensure-vault
 
 help:
 	@echo "Usage:"
@@ -53,6 +54,7 @@ help:
 	@echo "  NEXUS_ADMIN_PASSWORD (default: $(NEXUS_ADMIN_PASSWORD))"
 	@echo "  NEXUS_REGULAR_USER (default: $(NEXUS_REGULAR_USER))"
 	@echo "  NEXUS_REGULAR_PASSWORD (default: $(NEXUS_REGULAR_PASSWORD))"
+	@echo "  NEXUS_PYPI_REPO (default: $(NEXUS_PYPI_REPO))"
 	@echo "  NEXUS_ANONYMOUS_ENABLED (default: $(NEXUS_ANONYMOUS_ENABLED))"
 	@echo "  NEXUS_AUTO_INIT (default: $(NEXUS_AUTO_INIT))"
 	@echo "  NEXUS_WAIT_TIMEOUT (default: $(NEXUS_WAIT_TIMEOUT)s)"
@@ -89,6 +91,7 @@ ifeq ($(NEXUS_AUTO_INIT),true)
 	NEXUS_ADMIN_PASSWORD="$(NEXUS_ADMIN_PASSWORD)" \
 	NEXUS_REGULAR_USER="$(NEXUS_REGULAR_USER)" \
 	NEXUS_REGULAR_PASSWORD="$(NEXUS_REGULAR_PASSWORD)" \
+	NEXUS_PYPI_REPO="$(NEXUS_PYPI_REPO)" \
 	NEXUS_ANONYMOUS_ENABLED="$(NEXUS_ANONYMOUS_ENABLED)" \
 	NEXUS_WAIT_TIMEOUT="$(NEXUS_WAIT_TIMEOUT)" \
 	NEXUS_WAIT_INTERVAL="$(NEXUS_WAIT_INTERVAL)" \
@@ -115,6 +118,7 @@ ifeq ($(NEXUS_AUTO_INIT),true)
 	NEXUS_ADMIN_PASSWORD="$(NEXUS_ADMIN_PASSWORD)" \
 	NEXUS_REGULAR_USER="$(NEXUS_REGULAR_USER)" \
 	NEXUS_REGULAR_PASSWORD="$(NEXUS_REGULAR_PASSWORD)" \
+	NEXUS_PYPI_REPO="$(NEXUS_PYPI_REPO)" \
 	NEXUS_ANONYMOUS_ENABLED="$(NEXUS_ANONYMOUS_ENABLED)" \
 	NEXUS_WAIT_TIMEOUT="$(NEXUS_WAIT_TIMEOUT)" \
 	NEXUS_WAIT_INTERVAL="$(NEXUS_WAIT_INTERVAL)" \
@@ -162,3 +166,8 @@ endif
 
 clean:
 	rm -rf .local data logs run
+
+distclean:
+	@$(MAKE) down MODE=docker >/dev/null 2>&1 || true
+	@$(MAKE) down MODE=bare >/dev/null 2>&1 || true
+	@rm -rf "$(DOCKER_DATA_DIR)" .local data logs run

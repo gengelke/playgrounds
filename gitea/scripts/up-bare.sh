@@ -73,12 +73,21 @@ log "Setting password for user '${user_name}'"
   --password "$user_password" \
   --must-change-password=false
 
+runner_token="$("$gitea_bin" --config "$gitea_config" actions generate-runner-token | tr -d '\r\n')"
+[[ -n "$runner_token" ]] || die "Failed to generate runner registration token from Gitea"
+GITEA_RUNNER_TOKEN="$runner_token"
+export GITEA_RUNNER_TOKEN
+envfile_set "${ROOT_DIR}/runtime/shared/generated.env" "GITEA_RUNNER_TOKEN" "$GITEA_RUNNER_TOKEN"
+sync_credentials_to_vault
+log "Generated runner registration token from Gitea."
+
+remove_example_workflow_repo
 ensure_example_workflow_repo
 ensure_jenkins_example_repo
+ensure_generate_library_repo
 
-runner_token="${GITEA_RUNNER_TOKEN:-local-runner-token-change-me}"
 instance_url="http://127.0.0.1:${gitea_http_port}"
-runner_labels="${RUNNER_LABELS_BARE:-linux-amd64:host}"
+runner_labels="${RUNNER_LABELS_BARE:-linux-amd64:host,ubuntu-latest:host}"
 
 start_runner() {
   local runner_id="$1"
