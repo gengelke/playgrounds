@@ -3,6 +3,15 @@
 
 <h4><p align="center">This repository is for educational purposes. It contains playground setups for various tools & topics</p></h4>
 
+> [!WARNING]
+> This repository is an experimental setup for educational purposes only.
+> Do not expose any part of it to the public internet.
+> It uses insecure defaults such as default passwords and other convenience settings that are only acceptable for isolated local testing.
+
+> [!IMPORTANT]
+> Parts of this repository were generated with AI assistance.
+> Review generated code and configuration carefully before using or modifying it.
+
 ## Services
 
 - `vault`: Local HashiCorp Vault OSS environment with automatic bootstrap/init in docker or bare mode. See [vault/README.md](vault/README.md).

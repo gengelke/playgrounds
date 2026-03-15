@@ -1,5 +1,10 @@
 # Dual Jenkins Setup
 
+> [!WARNING]
+> This repository is an experimental setup for educational purposes only.
+> Do not expose any part of it to the public internet.
+> It uses insecure defaults such as default passwords and other convenience settings that are only acceptable for isolated local testing.
+
 This repository provisions:
 
 - `jenkins-prod` with `jenkins-prod-agent-1` and `jenkins-prod-agent-2`
