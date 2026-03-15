@@ -1,6 +1,55 @@
 pipeline {
   agent any
   stages {
+    stage('Resolve Nexus Credentials from Vault') {
+      steps {
+        sh '''#!/usr/bin/env bash
+set -euo pipefail
+
+banner() {
+  printf '\\n========== %s ==========%s' "$1" "\\n"
+}
+
+vault_addr="${VAULT_ADDR:-http://host.docker.internal:8200}"
+vault_token="${VAULT_TOKEN:-}"
+pypi_repo="${NEXUS_PYPI_REPO:-pypi-public}"
+
+banner "Fetch Nexus Credentials From Vault"
+
+if [[ -z "$vault_token" ]]; then
+  echo "VAULT_TOKEN is required for Vault authentication."
+  exit 1
+fi
+
+vault_response="$(curl -fsS -H "X-Vault-Token: ${vault_token}" "${vault_addr%/}/v1/secret/data/services/nexus")"
+nexus_url="$(printf '%s' "$vault_response" | jq -r '.data.data.url // empty')"
+nexus_user="$(printf '%s' "$vault_response" | jq -r '.data.data.admin_user // empty')"
+nexus_password="$(printf '%s' "$vault_response" | jq -r '.data.data.admin_password // empty')"
+
+if [[ -z "$nexus_url" || -z "$nexus_user" || -z "$nexus_password" ]]; then
+  echo "Failed to extract Nexus credentials from Vault path secret/data/services/nexus"
+  exit 1
+fi
+
+nexus_url="$(printf '%s' "$nexus_url" | sed \
+  -e 's#http://localhost#http://host.docker.internal#g' \
+  -e 's#http://127.0.0.1#http://host.docker.internal#g' \
+  -e 's#https://localhost#https://host.docker.internal#g' \
+  -e 's#https://127.0.0.1#https://host.docker.internal#g')"
+
+banner "Write Resolved Nexus Environment"
+
+{
+  echo "NEXUS_URL=${nexus_url}"
+  echo "NEXUS_USER=${nexus_user}"
+  echo "NEXUS_PASSWORD=${nexus_password}"
+  echo "NEXUS_PYPI_REPO=${pypi_repo}"
+} > .nexus.env
+chmod 600 .nexus.env
+'''
+      }
+    }
+
     stage('Checkout Source') {
       steps {
         sh '''#!/usr/bin/env bash
@@ -62,6 +111,8 @@ banner() {
   printf '\\n========== %s ==========%s' "$1" "\\n"
 }
 
+source .nexus.env
+
 employee_name="${EMPLOYEE_NAME:-}"
 employee_surname="${EMPLOYEE_SURNAME:-}"
 employee_role="${EMPLOYEE_ROLE:-}"
@@ -85,9 +136,42 @@ echo "Using employee: ${employee_name} ${employee_surname}"
 echo "Using role: ${employee_role}"
 echo "Using GraphQL endpoint: ${graphql_url}"
 
+banner "Prepare Example Client Environment"
+
+cd playground
+rm -rf .venv-add-employee
+python3 -m venv .venv-add-employee
+source .venv-add-employee/bin/activate
+
+unset SSL_CERT_FILE
+unset REQUESTS_CA_BUNDLE
+unset CURL_CA_BUNDLE
+
+python -m pip install --upgrade pip
+
+nexus_simple_url="${NEXUS_URL%/}/repository/${NEXUS_PYPI_REPO}/simple"
+nexus_host="$(printf '%s' "${NEXUS_URL}" | sed -E 's#^[a-zA-Z]+://([^/:]+).*#\\1#')"
+package_spec="fastapi-graphql-client${FASTAPI_GRAPHQL_CLIENT_VERSION:+==${FASTAPI_GRAPHQL_CLIENT_VERSION}}"
+
+banner "Install Package From Nexus"
+
+pip install \
+  --index-url https://pypi.org/simple \
+  --extra-index-url "${nexus_simple_url}" \
+  --trusted-host "${nexus_host}" \
+  "$package_spec"
+
+banner "Print Installed Package Version"
+
+python - <<'PY'
+from importlib.metadata import version
+
+print(f"Installed fastapi-graphql-client {version('fastapi-graphql-client')}")
+PY
+
 banner "Run Example Client"
-cd playground/api
-FORCE_COLOR=1 example-client/company.py \
+
+FORCE_COLOR=1 COMPANY_CLIENT_DISABLE_LOCAL_BOOTSTRAP=1 python api/example-client/company.py \
   --graphql-url "$graphql_url" \
   add-employee \
   --employee-name "$employee_name" \
@@ -104,6 +188,8 @@ FORCE_COLOR=1 example-client/company.py \
     always {
       sh '''#!/usr/bin/env bash
 printf "\\n========== Cleanup ==========\n"
+rm -f .nexus.env /tmp/nexus-create.out /tmp/nexus-pypi-health.out || true
+rm -rf playground/.venv-add-employee || true
 '''
     }
   }

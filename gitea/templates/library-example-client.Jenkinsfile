@@ -150,7 +150,7 @@ PY
 
 banner "Run Example Client"
 
-FORCE_COLOR=1 python api/example-client/company.py \
+FORCE_COLOR=1 COMPANY_CLIENT_DISABLE_LOCAL_BOOTSTRAP=1 python api/example-client/company.py \
   --graphql-url "${LIBRARY_EXAMPLE_CLIENT_GRAPHQL_URL:-http://127.0.0.1:8000/graphql}" \
   workflow
 '''

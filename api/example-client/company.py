@@ -20,6 +20,7 @@ GRAPHQL_CLIENT_FILE  = GRAPHQL_LIBRARY_CODE / "fastapi_graphql_client" / "client
 DEFAULT_GRAPHQL_URL  = os.getenv("API_URL", "http://127.0.0.1:8000/graphql")
 DEFAULT_ROLES        = ("Developer", "Senior Developer", "Superhero", "AvD")
 BOOTSTRAP_ENV_VAR    = "COMPANY_CLIENT_BOOTSTRAPPED"
+DISABLE_BOOTSTRAP_ENV_VAR = "COMPANY_CLIENT_DISABLE_LOCAL_BOOTSTRAP"
 
 
 FORCE_COLOR = os.getenv("FORCE_COLOR", "").strip().lower()
@@ -159,15 +160,27 @@ def ensure_runtime(graphql_url: str) -> None:
         and generated_client_is_current()
     )
     current_prefix = Path(sys.prefix).resolve()
+    local_bootstrap_disabled = os.getenv(DISABLE_BOOTSTRAP_ENV_VAR) == "1"
 
     if current_prefix == target_prefix:
         if not local_client_ready:
+            if local_bootstrap_disabled:
+                fail(
+                    "Installed GraphQL client package is missing or outdated. Publish the current fastapi-graphql-client package to Nexus first.",
+                    color=SOFT_RED,
+                )
             bootstrap_library_environment()
         sys.path.insert(0, str(GRAPHQL_LIBRARY_CODE))
         return
 
     if installed_client_is_current():
         return
+
+    if local_bootstrap_disabled:
+        fail(
+            "Installed GraphQL client package is missing or outdated. Publish the current fastapi-graphql-client package to Nexus first.",
+            color=SOFT_RED,
+        )
 
     if not local_client_ready:
         bootstrap_library_environment()
